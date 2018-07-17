@@ -47,30 +47,21 @@
                 unit = result
                 systemd_client.call(unit[0], "org.freedesktop.DBus.Properties", "Get", [ "org.freedesktop.systemd1.Unit", "SubState" ]).
                 done(function (result) {
-                        console.log("Zeronet Service subState: " + result[0].v);
+                        var state = result[0].v;
+                        console.log("Zeronet Service subState: " + state);
+                        if (state == "running") {
+                            isRunning = true;
+                            status_success();
+                        }
+                        else {
+                            isRunning = false;
+                            status_fail();
+                        }
                 }).
                 fail(function (error) {
                         console.log(error)
                 });
             });
-//             systemd_manager.call("GetUnitFileState", [ "zeronet.service" ]). 
-//             done(function (result) {
-//                 console.log("Zeronet.service status: " + result);
-// 	        if (result == "running") {
-// 	            isRunning = true;
-// 	            status_success(); 
-// 	        }
-// 	        else {
-// 	            isRunning = false;
-// 	            status_fail();
-// 	        }
-//             }).
-//             fail(function (error) {
-// 	    console.log(error);
-// 	    isRunning = false;
-// 	    status_fail()
-// 	    // Maybe some other error message that indicates that the service is not installed
-//             });
             
         }
         
