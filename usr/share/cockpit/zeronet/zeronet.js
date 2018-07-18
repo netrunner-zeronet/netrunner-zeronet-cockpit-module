@@ -1,4 +1,3 @@
-var output = $("#output");
 var stat = $("#stat");
 var btn = $("#start");
 var openBtn = $("#open");
@@ -50,12 +49,10 @@ function zeronet_run() {
   //proc.stream(zeronet_output);
   //proc.fail(zeronet_fail);
   stat.empty();
-  output.empty();
   if (!isRunning) {
     systemd_manager.call("StartUnit", [ "zeronet.service", "replace" ]). 
     done(function (result) {
       console.log("Zeronet.service start: " + result);
-      zeronet_output(result);
       zeronet_success();
     }).
     fail(function (error) {
@@ -68,7 +65,6 @@ function zeronet_run() {
     systemd_manager.call("StopUnit", [ "zeronet.service", "replace" ]). 
     done(function (result) {
       console.log("Zeronet.service stop: " + result);
-      zeronet_output(result);
       zeronet_success();
     }).
     fail(function (error) {
@@ -113,8 +109,3 @@ function status_fail() {
   btn.text("Start");
   openBtn.hide();
 }
-
-function zeronet_output(data) {
-  output.append(document.createTextNode(data));
-  checkStatus();
-} 
