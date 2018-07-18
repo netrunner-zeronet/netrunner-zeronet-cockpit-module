@@ -1,0 +1,13 @@
+Source: netrunner-zeronet-cockpit-module
+Section: unknown
+Priority: optional
+Maintainer: Leszek Lesner <leszek@zevenos.com>
+Build-Depends: debhelper (>= 9)
+Standards-Version: 3.9.8
+Homepage: https://github.com/netrunner-zeronet/netrunner-zeronet-cockpit-module
+
+Package: netrunner-zeronet-cockpit-module
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: netrunner zeronet module for cockpit
+ This package contains the zeronet module for cockpit
