@@ -78,16 +78,12 @@ function zeronet_run() {
 }
 
 function open_zeronet() {
-  var proc = cockpit.spawn(["hostname"]);
-  proc.done(hostname_success);
+  var hostname = window.location.hostname
+  window.open("http://" + hostname);
 }
 
 function open_adv_settings() {
   cockpit.jump('/system/services#/zeronet.service');
-}
-
-function hostname_success(data) {
-  window.open("http://" + data);
 }
 
 function zeronet_success() {
