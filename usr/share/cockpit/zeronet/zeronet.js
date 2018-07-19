@@ -1,6 +1,7 @@
 var stat = $("#stat");
 var btn = $("#start");
 var openBtn = $("#open");
+var advBtn = $("#openSystemd");
 var isRunning = false;
 
 var SYSTEMD_BUSNAME = "org.freedesktop.systemd1"
@@ -42,6 +43,7 @@ checkStatus();
 
 $("#start").on("click", zeronet_run);
 $("#open").on("click", open_zeronet);
+$("#openSystemd").on("click", open_adv_settings);
 
 function zeronet_run() {
   //var proc = cockpit.spawn(["zeronet-startstop.sh"]);
@@ -78,6 +80,10 @@ function zeronet_run() {
 function open_zeronet() {
   var proc = cockpit.spawn(["hostname"]);
   proc.done(hostname_success);
+}
+
+function open_adv_settings() {
+  cockpit.jump('/system/services#/zeronet.service');
 }
 
 function hostname_success(data) {
