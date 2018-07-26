@@ -36,7 +36,7 @@ function getFs() {
 function mountPartitions() {
   PART=/dev/$1
   MNTPNT=$2
-  sudo mount $1 $2 2>&1 > /dev/null
+  sudo mount $PART $2 2>&1 > /dev/null
 }
 
 function add2fstab() {
