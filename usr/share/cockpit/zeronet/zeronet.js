@@ -41,6 +41,34 @@ function checkStatus() {
 
 checkStatus();
 
+// TODO: Finish this usb drive check
+function checkUsbDrive() {
+  var udisks_client = cockpit.dbus("org.freedesktop.UDisks2",
+                                           "/org/freedesktop/UDisks2");
+  var udisks_manager = udisks_client.proxy(udisks_client, "org.freedesktop.DBus.ObjectManager");
+  var managedObj;
+  udisks_manager.call("GetManagedObjects", []).
+  done(function (result) {
+      console.log("Result: " + result);
+      managedObj = result
+  }).fail(function (error) {
+     console.log(error)
+  });
+
+// Idea on how to identify the usb removable device
+//  for (k in managedObj) {
+//     console.log(k);
+//     var drive_info = k.call("get" , ['org.freedesktop.UDisks2.Drive']);
+//     console.log(drive_info);
+//     if (drive_info.get('ConnectionBus') == 'usb' && drive_info.get('Removable')) {
+//         if (drive_info['MediaRemovable']) {
+//          console.log("Device : " + k + " is a usb drive");
+//         }
+     //}
+//  }
+}
+// END of TODO
+
 $("#start").on("click", zeronet_run);
 $("#open").on("click", open_zeronet);
 $("#openSystemd").on("click", open_adv_settings);
