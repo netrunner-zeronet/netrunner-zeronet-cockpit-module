@@ -39,10 +39,7 @@ function checkStatus() {
   
 }
 
-checkStatus();
-
-// TODO: Finish this usb drive check
-function checkUsbDrive() {
+/*function checkUsbDrive() {
   var udisks_client = cockpit.dbus("org.freedesktop.UDisks2",
                                            "/org/freedesktop/UDisks2");
   var udisks_manager = udisks_client.proxy(udisks_client, "org.freedesktop.DBus.ObjectManager");
@@ -64,14 +61,60 @@ function checkUsbDrive() {
 //         if (drive_info['MediaRemovable']) {
 //          console.log("Device : " + k + " is a usb drive");
 //         }
-     //}
+     //} 
 //  }
+}*/
+
+function checkUsbDrive() {
+  console.log("Checking for usb devices...");
+  var proc = cockpit.spawn(["zeronet-external.sh", "-l"]);
+  proc.done(checkUsb_success);
+  proc.fail(checkUsb_fail);
 }
-// END of TODO
+
+checkStatus();
+checkUsbDrive();
 
 $("#start").on("click", zeronet_run);
 $("#open").on("click", open_zeronet);
 $("#openSystemd").on("click", open_adv_settings);
+
+var usbDevices = new Array();
+var usbFs = new Array();
+var usbDisks = new Array();
+
+function checkUsb_success(data) {
+  var usbDisksOut = data.split('\n');
+  for (var i=0; i<usbDisksOut.length; i++) {
+    if (usbDisksOut[i] != "") { 
+      var usbDev
+      usbDev = usbDisksOut[i];
+      usbDevices.push(usbDev);
+      var getFsProc = cockpit.spawn(["zeronet-external.sh", "-g", usbDisksOut[i]]);
+      getFsProc.done(getFs_success);
+    }
+  } 
+}
+
+function checkUsb_fail() {
+  console.log("no usb devices detected!")
+}
+
+function getFs_success(data) {
+  if (data != "") usbFs.push(data)
+  for (var j=0; j<usbDevices.length; j++) {
+    var usbObj = new Object();
+    if (usbDevices.length == usbFs.length) {
+      usbObj.name = usbDevices[j];
+      usbObj.fs = usbFs[j];
+      usbDisks.push(usbObj);
+    }
+  }
+  // Debug Output
+  for (var k=0; k<usbDisks.length; k++) {
+    console.debug("Found usb device: " + usbDisks[k].name + " with filesystem: " + usbDisks[k].fs);
+  }
+}
 
 function zeronet_run() {
   //var proc = cockpit.spawn(["zeronet-startstop.sh"]);
