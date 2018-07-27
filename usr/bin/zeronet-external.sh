@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BLOCK_DEVICES=$(lsblk -d -n -oNAME,TYPE | grep disk | grep -v zram | awk '{print $1}')
+BLOCK_DEVICES=$(lsblk -p -S -o  NAME,TRAN  | grep usb | awk '{print $1}')
 ORIG_LOCATION=/opt/zeronet/ZeroNet-master
 PLASMA_CONFIG_LOCATION=~/.config/plasma-org.kde.plasma.desktop-appletsrc
 
@@ -22,9 +22,11 @@ function cpZeronet() {
 }
 
 function showPartitions() {
-  DISK=$1
-  PART=$(lsblk --list -n -oNAME,TYPE | grep part | grep -v zram | grep $DISK | awk '{print $1}')
-  echo $PART
+  for USBDISKS in $BLOCK_DEVICES; do
+    DISK=${USBDISKS##*/}
+    PART=$(lsblk --list -n -oNAME,TYPE | grep part | grep -v zram | grep $DISK | awk '{print $1}')
+    echo $PART
+  done
 }
 
 function getFs() {
@@ -74,18 +76,12 @@ function show_menu() {
 clear
 echo ""
 echo "This script will allow you to copy zeronet onto a usb device and use it from there."
-echo "Please choose which disk you want to use:"
-echo "Available devices:" 
-echo $BLOCK_DEVICES
-read -p "Enter device: " INPUT_DEVICE
-case "$BLOCK_DEVICES" in 
-  *$INPUT_DEVICE*)
-    echo "Which partition do you want to use?"
-    echo "Available partitions:"
-    PARTS=$(showPartitions $INPUT_DEVICE)
-    echo $PARTS
-    read -p "Enter partition: " INPUT_PART
-    case "$PARTS" in
+echo "Please choose which disk & partition you want to use:"
+echo "Available partitions:"
+PARTS=$(showPartitions)
+echo $PARTS
+read -p "Enter partition: " INPUT_PART
+case "$PARTS" in
       *$INPUT_PART*)
         add2fstab $INPUT_PART /mnt/zeronet-usb
         mountPartitions $INPUT_PART /mnt/zeronet-usb
@@ -93,9 +89,6 @@ case "$BLOCK_DEVICES" in
         setLocation /mnt/zeronet-usb/ZeroNet-master
         ;;
       *) echo "Error. You can only enter one of the listed partitions" ;;
-    esac
-    ;;
-  *) echo "Error. You can only enter one of the listed devices" ;;
 esac
 }
 
@@ -103,6 +96,8 @@ if [[ "$1" == "-u" ]]; then
   uninstall
 elif [[ "$1" == "-i" ]] && [[ ! -z "$2" ]]; then
   install $2
+elif [[ "$1" == "--list-partitions" ]] || [[ "$1" == "-l" ]]; then
+  showPartitions
 else
   show_menu
 fi
