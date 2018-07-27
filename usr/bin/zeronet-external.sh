@@ -98,6 +98,8 @@ elif [[ "$1" == "-i" ]] && [[ ! -z "$2" ]]; then
   install $2
 elif [[ "$1" == "--list-partitions" ]] || [[ "$1" == "-l" ]]; then
   showPartitions
+elif [[ ("$1" == "--get-fs" || "$1" == "-g") &&  ! -z "$2" ]] ; then
+   getFs $2
 else
   show_menu
 fi
