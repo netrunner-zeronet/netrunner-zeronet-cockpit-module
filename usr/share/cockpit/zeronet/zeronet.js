@@ -39,10 +39,7 @@ function checkStatus() {
   
 }
 
-checkStatus();
-
-// TODO: Finish this usb drive check
-function checkUsbDrive() {
+/*function checkUsbDrive() {
   var udisks_client = cockpit.dbus("org.freedesktop.UDisks2",
                                            "/org/freedesktop/UDisks2");
   var udisks_manager = udisks_client.proxy(udisks_client, "org.freedesktop.DBus.ObjectManager");
@@ -64,14 +61,91 @@ function checkUsbDrive() {
 //         if (drive_info['MediaRemovable']) {
 //          console.log("Device : " + k + " is a usb drive");
 //         }
-     //}
+     //} 
 //  }
+}*/
+
+function checkUsbDrive() {
+  console.log("Checking for usb devices...");
+  var proc = cockpit.spawn(["zeronet-external.sh", "-l"]);
+  proc.done(checkUsb_success);
+  proc.fail(checkUsb_fail);
 }
-// END of TODO
+
+checkStatus();
+checkUsbDrive();
 
 $("#start").on("click", zeronet_run);
 $("#open").on("click", open_zeronet);
 $("#openSystemd").on("click", open_adv_settings);
+
+var usbDevices = new Array();
+var usbFs = new Array();
+var usbDisks = new Array();
+
+function checkUsb_success(data) {
+  var usbDisksOut = data.split('\n');
+  for (var i=0; i<usbDisksOut.length; i++) {
+    if (usbDisksOut[i] != "") { 
+      var usbDev
+      usbDev = usbDisksOut[i];
+      usbDevices.push(usbDev);
+      var getFsProc = cockpit.spawn(["zeronet-external.sh", "-g", usbDisksOut[i]]);
+      getFsProc.done(getFs_success);
+    }
+  } 
+}
+
+function checkUsb_fail() {
+  console.log("no usb devices detected!")
+}
+
+function getFs_success(data) {
+  if (data != "") usbFs.push(data)
+  // Debug Output
+  for (var j=0; j<usbDevices.length; j++) {
+    var usbObj = new Object();
+    if (usbDevices.length == usbFs.length) {
+      usbObj.name = usbDevices[j];
+      usbObj.fs = usbFs[j];
+      usbDisks.push(usbObj);
+    }
+  }
+  // Create UI Elements
+  /*var usbHead = document.createElement("div", {
+                    className: "panel panel-default",
+                    id: "usbHeader" })
+  var usbHeading = document.createElement("div", {
+                    className: "panel-heading" })
+  usbHead.appendChild(usbHeading);
+  var rightSpan = document.createElement("span", {
+                    className: "pull-right" }) 
+  usbHeading.appendChild(rightSpan)
+  var usbText = document.createElement("span", null, "USB Devices");
+  rightSpan.appendChild(usbText);
+  var mainC = document.getElementById('main-container');
+  mainC.appendChild(usbHead);*/
+
+  var mainC = document.getElementById('main-container');
+  var deviceHtml = "";
+
+  for (var k=0; k<usbDisks.length; k++) {
+    deviceHtml += "<br/><div id=\"usbHeader\" class=\"panel panel-default\"><div class=\"panel-heading\">\
+    <b>USB Device: " + usbDisks[k].name + "</b></span></div></div>"
+
+    deviceHtml += "<table>"
+    deviceHtml += "<tr><td><img src=\"usbdev.png\"></td>"
+    if (usbDisks[k].fs.indexOf("fat") == -1) {
+      deviceHtml += "<td>Filesystem: " + usbDisks[k].fs + "&nbsp;&nbsp;BUTTONS HERE</td></tr>"
+    }
+    else 
+      deviceHtml += "<td>Filesystem: " + usbDisks[k].fs + "&nbsp;&nbsp;\
+                          Use a linux compatible filesystem for usage with Zeronet.</td></tr>"
+    deviceHtml += "</table>"
+    console.debug("Found usb device: " + usbDisks[k].name + " with filesystem: " + usbDisks[k].fs);
+  }
+  mainC.innerHTML += deviceHtml;
+}
 
 function zeronet_run() {
   //var proc = cockpit.spawn(["zeronet-startstop.sh"]);
