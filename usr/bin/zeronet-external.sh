@@ -35,6 +35,12 @@ function getFs() {
   echo $FS
 }
 
+function getSize() {
+  PART=$1
+  SIZE=$(lsblk --list -fs -n -oNAME,TYPE,SIZE | grep part | grep -v zram | grep $PART | awk '{print $3}')
+  echo $SIZE
+}
+
 function mountPartitions() {
   PART=/dev/$1
   MNTPNT=$2
@@ -100,6 +106,8 @@ elif [[ "$1" == "--list-partitions" ]] || [[ "$1" == "-l" ]]; then
   showPartitions
 elif [[ ("$1" == "--get-fs" || "$1" == "-g") &&  ! -z "$2" ]] ; then
    getFs $2
+elif [[ ("$1" == "--get-size" || "$1" == "-s") &&  ! -z "$2" ]] ; then
+   getSize $2
 else
   show_menu
 fi
