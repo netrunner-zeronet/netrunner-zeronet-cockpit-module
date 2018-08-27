@@ -67,7 +67,7 @@ function checkStatus() {
 
 function checkUsbDrive() {
   console.log("Checking for usb devices...");
-  var proc = cockpit.spawn(["zeronet-external.sh", "-l"]);
+  var proc = cockpit.spawn(["zeronet-external.sh", "-j"]);
   proc.done(checkUsb_success);
   proc.fail(checkUsb_fail);
 }
@@ -79,38 +79,36 @@ $("#start").on("click", zeronet_run);
 $("#open").on("click", open_zeronet);
 $("#openSystemd").on("click", open_adv_settings);
 
-var usbDevices = new Array();
-var usbFs = new Array();
-var usbDisks = new Array();
+var usbDisks
 
 function checkUsb_success(data) {
-  var usbDisksOut = data.split('\n');
-  for (var i=0; i<usbDisksOut.length; i++) {
-    if (usbDisksOut[i] != "") { 
-      var usbDev
-      usbDev = usbDisksOut[i];
-      usbDevices.push(usbDev);
-      var getFsProc = cockpit.spawn(["zeronet-external.sh", "-g", usbDisksOut[i]]);
-      getFsProc.done(getFs_success);
-    }
-  } 
+  var usbDisksOut = data
+  usbDisks = JSON.parse(usbDisksOut);
+  createUI_USB_devices();
+}
+
+function migrateTo(dev) {
+  console.log("Called migrate to : " + dev.id)
 }
 
 function checkUsb_fail() {
   console.log("no usb devices detected!")
 }
 
-function getFs_success(data) {
-  if (data != "") usbFs.push(data)
-  // Debug Output
-  for (var j=0; j<usbDevices.length; j++) {
-    var usbObj = new Object();
-    if (usbDevices.length == usbFs.length) {
-      usbObj.name = usbDevices[j];
-      usbObj.fs = usbFs[j];
-      usbDisks.push(usbObj);
-    }
-  }
+// UI Creation functions TODO: Maybe put in external js file
+function createButton(type,id,name) {
+  return "<button class=\"btn btn-default btn-" + type + "\" id=\""+ id + "\">" + name + "</button>"
+}
+function createUSB_dev_header(text) {
+  return "<br/><div id=\"usbHeader\" class=\"panel panel-default\"><div class=\"panel-heading\">\
+    <b>USB Device: " + text + "</b></span></div></div>"
+}
+function createMigrateButton(type,id,name) {
+  return "<button class=\"btn btn-default btn-" + type + "\" id=\""+ id + "\" onClick=\"migrateTo("+id+")\">" + name + "</button>"
+}
+// END of UI Creation functions
+
+function createUI_USB_devices() {
   // Create UI Elements
   /*var usbHead = document.createElement("div", {
                     className: "panel panel-default",
@@ -126,23 +124,27 @@ function getFs_success(data) {
   var mainC = document.getElementById('main-container');
   mainC.appendChild(usbHead);*/
 
+  console.log("Create UI called. usbDisks.disks.length: " + usbDisks.disks.length);
+
   var mainC = document.getElementById('main-container');
   var deviceHtml = "";
 
-  for (var k=0; k<usbDisks.length; k++) {
-    deviceHtml += "<br/><div id=\"usbHeader\" class=\"panel panel-default\"><div class=\"panel-heading\">\
-    <b>USB Device: " + usbDisks[k].name + "</b></span></div></div>"
+  for (var k=0; k<usbDisks.disks.length; k++) {
+    deviceHtml += createUSB_dev_header(usbDisks.disks[k].name + "  (" + usbDisks.disks[k].dev + ")")
 
-    deviceHtml += "<table>"
+    deviceHtml += "<table class=\"table\">"
     deviceHtml += "<tr><td><img src=\"usbdev.png\"></td>"
-    if (usbDisks[k].fs.indexOf("fat") == -1) {
-      deviceHtml += "<td>Filesystem: " + usbDisks[k].fs + "&nbsp;&nbsp;BUTTONS HERE</td></tr>"
+    if (usbDisks.disks[k].fs.indexOf("ext") != -1 || usbDisks.disks[k].fs.indexOf("xfs") != -1 ||
+    usbDisks.disks[k].fs.indexOf("btrfs") != -1) {
+      deviceHtml += "<td><p>Filesystem: " + usbDisks.disks[k].fs + "&nbsp;&nbsp;\
+                     </p></td><td><p>Size: " + usbDisks.disks[k].size + "</p></td><td>" + createMigrateButton("secondary",usbDisks.disks[k].name,"Migrate Zeronet here") + "</td></tr>"
     }
     else 
-      deviceHtml += "<td>Filesystem: " + usbDisks[k].fs + "&nbsp;&nbsp;\
-                          Use a linux compatible filesystem for usage with Zeronet.</td></tr>"
+      deviceHtml += "<td><p>Filesystem: " + usbDisks.disks[k].fs + "&nbsp;&nbsp;\
+                     </p></td><td><p>Size: " + usbDisks.disks[k].size + "</p></td>\
+                     <td><p>Use a linux compatible filesystem for usage with Zeronet.</p></td></tr>"
     deviceHtml += "</table>"
-    console.debug("Found usb device: " + usbDisks[k].name + " with filesystem: " + usbDisks[k].fs);
+    console.debug("Found usb device: " + usbDisks.disks[k].name + " with filesystem: " + usbDisks.disks[k].fs);
   }
   mainC.innerHTML += deviceHtml;
 }
