@@ -83,8 +83,10 @@ var usbDisks
 
 function checkUsb_success(data) {
   var usbDisksOut = data
-  usbDisks = JSON.parse(usbDisksOut);
-  createUI_USB_devices();
+  if (usbDisksOut != "") {
+     usbDisks = JSON.parse(usbDisksOut);
+     createUI_USB_devices();
+  }
 }
 
 function migrateTo(dev) {
@@ -125,28 +127,30 @@ function createUI_USB_devices() {
   mainC.appendChild(usbHead);*/
 
   console.log("Create UI called. usbDisks.disks.length: " + usbDisks.disks.length);
+  if (usbDisks.disks.length != 0) {
 
-  var mainC = document.getElementById('main-container');
-  var deviceHtml = "";
+     var mainC = document.getElementById('main-container');
+     var deviceHtml = "";
 
-  for (var k=0; k<usbDisks.disks.length; k++) {
-    deviceHtml += createUSB_dev_header(usbDisks.disks[k].name + "  (" + usbDisks.disks[k].dev + ")")
+     for (var k=0; k<usbDisks.disks.length; k++) {
+        deviceHtml += createUSB_dev_header(usbDisks.disks[k].name + "  (" + usbDisks.disks[k].dev + ")")
 
-    deviceHtml += "<table class=\"table\">"
-    deviceHtml += "<tr><td><img src=\"usbdev.png\"></td>"
-    if (usbDisks.disks[k].fs.indexOf("ext") != -1 || usbDisks.disks[k].fs.indexOf("xfs") != -1 ||
-    usbDisks.disks[k].fs.indexOf("btrfs") != -1) {
-      deviceHtml += "<td><p>Filesystem: " + usbDisks.disks[k].fs + "&nbsp;&nbsp;\
+        deviceHtml += "<table class=\"table\">"
+        deviceHtml += "<tr><td><img src=\"usbdev.png\"></td>"
+        if (usbDisks.disks[k].fs.indexOf("ext") != -1 || usbDisks.disks[k].fs.indexOf("xfs") != -1 ||
+        usbDisks.disks[k].fs.indexOf("btrfs") != -1) {
+           deviceHtml += "<td><p>Filesystem: " + usbDisks.disks[k].fs + "&nbsp;&nbsp;\
                      </p></td><td><p>Size: " + usbDisks.disks[k].size + "</p></td><td>" + createMigrateButton("secondary",usbDisks.disks[k].name,"Migrate Zeronet here") + "</td></tr>"
-    }
-    else 
-      deviceHtml += "<td><p>Filesystem: " + usbDisks.disks[k].fs + "&nbsp;&nbsp;\
+        }
+        else 
+            deviceHtml += "<td><p>Filesystem: " + usbDisks.disks[k].fs + "&nbsp;&nbsp;\
                      </p></td><td><p>Size: " + usbDisks.disks[k].size + "</p></td>\
                      <td><p>Use a linux compatible filesystem for usage with Zeronet.</p></td></tr>"
-    deviceHtml += "</table>"
-    console.debug("Found usb device: " + usbDisks.disks[k].name + " with filesystem: " + usbDisks.disks[k].fs);
+            deviceHtml += "</table>"
+            console.debug("Found usb device: " + usbDisks.disks[k].name + " with filesystem: " + usbDisks.disks[k].fs);
+        }
+        mainC.innerHTML += deviceHtml;
   }
-  mainC.innerHTML += deviceHtml;
 }
 
 function zeronet_run() {
