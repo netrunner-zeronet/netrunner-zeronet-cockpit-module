@@ -78,6 +78,23 @@ sudo mv /opt/zeronet/ZeroNet-master-backup /opt/zeronet/ZeroNet-master
 echo " " | sudo tee /etc/fstab 
 }
 
+function listJson() {
+  JSON="{["
+  arr=($(showPartitions))
+  vars=(${arr[@]})
+  len=${#arr[@]}
+  for (( i=0; i<=len; i++ )); do
+  if [ $i -lt $len ] && [ $i != 0 ]; then 
+     JSON="$JSON ,"
+  elif [ $i == $len ]; then 
+     JSON="$JSON ]}"
+     echo $JSON
+     exit 0
+  fi
+  JSON="$JSON { name: \"${vars[i]}\", dev: \"/dev/${vars[i]}\", size: \"$(getSize ${vars[i]})\", fs: \"$(getFs ${vars[i]})\" }"
+  done
+}
+
 function show_menu() {
 clear
 echo ""
@@ -108,6 +125,8 @@ elif [[ ("$1" == "--get-fs" || "$1" == "-g") &&  ! -z "$2" ]] ; then
    getFs $2
 elif [[ ("$1" == "--get-size" || "$1" == "-s") &&  ! -z "$2" ]] ; then
    getSize $2
+elif [[ ("$1" == "--list-json" || "$1" == "-j") ]] ; then
+   listJson
 else
   show_menu
 fi
