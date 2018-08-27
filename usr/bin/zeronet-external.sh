@@ -79,7 +79,7 @@ echo " " | sudo tee /etc/fstab
 }
 
 function listJson() {
-  JSON="{["
+  JSON="{ \"disks\": ["
   arr=($(showPartitions))
   vars=(${arr[@]})
   len=${#arr[@]}
@@ -91,7 +91,7 @@ function listJson() {
      echo $JSON
      exit 0
   fi
-  JSON="$JSON { name: \"${vars[i]}\", dev: \"/dev/${vars[i]}\", size: \"$(getSize ${vars[i]})\", fs: \"$(getFs ${vars[i]})\" }"
+  JSON="$JSON { \"name\": \"${vars[i]}\", \"dev\": \"/dev/${vars[i]}\", \"size\": \"$(getSize ${vars[i]})\", \"fs\": \"$(getFs ${vars[i]})\" }"
   done
 }
 
