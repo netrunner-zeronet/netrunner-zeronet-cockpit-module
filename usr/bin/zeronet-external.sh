@@ -44,7 +44,10 @@ function getSize() {
 function mountPartitions() {
   PART=/dev/$1
   MNTPNT=$2
-  sudo mount $PART $2 2>&1 > /dev/null
+  if [ -d $MNTPNT ]; then
+      sudo mkdir -p $MNTPNT
+  fi
+  sudo mount $PART $MNTPNT 2>&1 > /dev/null
 }
 
 function add2fstab() {
