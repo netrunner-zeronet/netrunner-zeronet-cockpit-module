@@ -138,7 +138,7 @@ function createUI_USB_devices() {
         deviceHtml += "<table class=\"table\">"
         deviceHtml += "<tr><td><img src=\"usbdev.png\"></td>"
         if (usbDisks.disks[k].fs.indexOf("ext") != -1 || usbDisks.disks[k].fs.indexOf("xfs") != -1 ||
-        usbDisks.disks[k].fs.indexOf("btrfs") != -1) {
+        usbDisks.disks[k].fs.indexOf("btrfs") != -1) ||  usbDisks.disks[k].fs.indexOf("ntfs") != -1) {
            deviceHtml += "<td><p>Filesystem: " + usbDisks.disks[k].fs + "&nbsp;&nbsp;\
                      </p></td><td><p>Size: " + usbDisks.disks[k].size + "</p></td><td>" + createMigrateButton("secondary",usbDisks.disks[k].name,"Migrate Zeronet here") + "</td></tr>"
         }
