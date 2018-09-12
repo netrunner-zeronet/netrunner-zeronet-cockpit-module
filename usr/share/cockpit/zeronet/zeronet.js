@@ -149,7 +149,7 @@ function createUI_USB_devices() {
             deviceHtml += "</table>"
             console.debug("Found usb device: " + usbDisks.disks[k].name + " with filesystem: " + usbDisks.disks[k].fs);
         }
-        mainC.innerHTML += deviceHtml;
+        mainC.insertAdjacentHTML('beforeend', deviceHtml);
   }
 }
 
