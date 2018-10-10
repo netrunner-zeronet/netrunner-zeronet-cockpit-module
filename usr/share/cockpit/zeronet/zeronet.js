@@ -10,10 +10,13 @@ var systemd_client = cockpit.dbus(SYSTEMD_BUSNAME, { superuser: "try" });
 var systemd_manager = systemd_client.proxy("org.freedesktop.systemd1.Manager",
 					   "/org/freedesktop/systemd1"); 
 
+$("#statusSpinner").toggle(false)
+
 function checkStatus() {
   //var proc2 = cockpit.spawn(["zeronet-startstop.sh", "-status"]);
   //proc2.done(status_success);
   //proc2.fail(status_fail);
+  $("#statusSpinner").toggle(true)
   var unit;
   systemd_manager.call("GetUnit", [ "zeronet.service" ]).
   done(function (result) {
@@ -207,6 +210,7 @@ function zeronet_fail() {
 }
 
 function status_success() {
+  $("#statusSpinner").toggle(false);
   stat.css("color", "green");
   stat.text("running");
   btn.text("Stop");
@@ -214,6 +218,7 @@ function status_success() {
 }
 
 function status_fail() {
+  $("#statusSpinner").toggle(false);
   stat.css("color", "red");
   stat.text("not running");
   btn.text("Start");
