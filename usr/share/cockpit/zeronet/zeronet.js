@@ -78,7 +78,7 @@ function checkUsbDrive() {
 checkStatus();
 checkUsbDrive();
 
-$("#start").on("click", zeronet_run);
+$("#start").on("click", zeronet_toggle);
 $("#open").on("click", open_zeronet);
 $("#openSystemd").on("click", open_adv_settings);
 
@@ -94,6 +94,8 @@ function checkUsb_success(data) {
 
 function migrateTo(dev) {
   console.log("Called migrate to : " + dev.id)
+  if (isRunning) {
+  }
 }
 
 function checkUsb_fail() {
@@ -156,11 +158,20 @@ function createUI_USB_devices() {
   }
 }
 
-function zeronet_run() {
-  //var proc = cockpit.spawn(["zeronet-startstop.sh"]);
-  //proc.done(zeronet_success);
-  //proc.stream(zeronet_output);
-  //proc.fail(zeronet_fail);
+function zeronet_stop() {
+    systemd_manager.call("StopUnit", [ "zeronet.service", "replace" ]). 
+    done(function (result) {
+      console.log("Zeronet.service stop: " + result);
+      zeronet_success();
+    }).
+    fail(function (error) {
+      console.log(error);
+      zeronet_fail();
+      // Maybe some other error message that indicates that the service is not installed
+    });
+}
+
+function zeronet_start() {
   stat.empty();
   if (!isRunning) {
     systemd_manager.call("StartUnit", [ "zeronet.service", "replace" ]). 
@@ -174,19 +185,17 @@ function zeronet_run() {
       // Maybe some other error message that indicates that the service is not installed
     });
   }
+}
+
+function zeronet_toggle() {
+  if (!isRunning) {
+   zeronet_start();
+  }
   else {
-    systemd_manager.call("StopUnit", [ "zeronet.service", "replace" ]). 
-    done(function (result) {
-      console.log("Zeronet.service stop: " + result);
-      zeronet_success();
-    }).
-    fail(function (error) {
-      console.log(error);
-      zeronet_fail();
-      // Maybe some other error message that indicates that the service is not installed
-    });
+   zeronet_stop();
   }
 }
+
 
 function open_zeronet() {
   var hostname = window.location.hostname
