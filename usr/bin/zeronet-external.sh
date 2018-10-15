@@ -81,6 +81,19 @@ sudo mv /opt/zeronet/ZeroNet-master-backup /opt/zeronet/ZeroNet-master
 echo " " | sudo tee /etc/fstab 
 }
 
+function checkZeronet() {
+ DEV=$1
+ TMPMNT=$(mktemp -d)
+ mount_partitions $DEV $TMPMNT
+ if [ -d "$TMPMNT/ZeroNet-master" ]; then
+    umount $TMPMNT
+    return 0
+ else 
+    umount $TMPMNT
+    return 1
+ fi
+}
+
 function listJson() {
   JSON="{ \"disks\": ["
   arr=($(showPartitions))
@@ -133,3 +146,5 @@ elif [[ ("$1" == "--list-json" || "$1" == "-j") ]] ; then
 else
   show_menu
 fi
+
+exit 0
