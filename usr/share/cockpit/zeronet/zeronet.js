@@ -97,6 +97,25 @@ function migrateTo(dev) {
   if (isRunning) {
    zeronet_stop()
   }
+  var migrateProc = cockpit.spawn(["zeronet-external.sh", "-i", dev.id]);
+  stat.css("color", "yellow");
+  stat.text("Migration running...");
+  btn.hide();
+  document.getElementById(dev.id).style.visibility="hidden";
+  migrateProc.done(migrate_success);
+  migrateProc.fail(migrate_fail);
+}
+
+function migrate_success() {
+  stat.css("color", "green");
+  stat.text("Migration completed.");
+  btn.show();
+}
+
+function migrate_fail() {
+  stat.css("color", "red");
+  stat.text("Migration failed.");
+  btn.show();
 }
 
 function checkUsb_fail() {
