@@ -95,6 +95,7 @@ function checkUsb_success(data) {
 function migrateTo(dev) {
   console.log("Called migrate to : " + dev.id)
   if (isRunning) {
+   zeronet_stop()
   }
 }
 
