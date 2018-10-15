@@ -65,13 +65,29 @@ sleep 2;
 plasmashell 2>&1 > /dev/null
 }
 
+function checkSpace() {
+  DRIVE=$1
+  reqSpace=$(du -s /opt/zeronet/ZeroNet-master | awk '{print $1}')
+  SPACE=`df "$DRIVE" | awk 'END{print $4}'`
+  if [[ $SPACE -le $reqSpace ]]; then
+    echo "not enough Space"
+    return 1
+  else 
+    return 0
+  fi
+}
+
 function install() {
  INPUT_PART=$(echo $1 | sed -e "s|^/dev/||")
- add2fstab $INPUT_PART /mnt/zeronet-usb
  mountPartitions $INPUT_PART /mnt/zeronet-usb
- cpZeronet /mnt/zeronet-usb/
- setLocation /mnt/zeronet-usb/ZeroNet-master
- echo "Configuration finished. Please restart Zeronet."
+ if checkSpace /dev/$INPUT_PART; then
+   cpZeronet /mnt/zeronet-usb/
+   setLocation /mnt/zeronet-usb/ZeroNet-master
+   add2fstab $INPUT_PART /mnt/zeronet-usb
+   echo "Configuration finished. Please restart Zeronet."
+ else
+   exit 1
+ fi
 }
 
 function uninstall() {
