@@ -67,7 +67,7 @@ plasmashell 2>&1 > /dev/null
 
 function checkSpace() {
   DRIVE=$1
-  reqSpace=$(du -s /opt/zeronet/ZeroNet-master | awk '{print $1}')
+  reqSpace=$(du -s $ORIG_LOCATION | awk '{print $1}')
   SPACE=`df "$DRIVE" | awk 'END{print $4}'`
   if [[ $SPACE -le $reqSpace ]]; then
     echo "not enough Space"
@@ -92,21 +92,52 @@ function install() {
 
 function uninstall() {
 echo "Undo external zeronet"
-sudo rm /opt/zeronet/ZeroNet-master
-sudo mv /opt/zeronet/ZeroNet-master-backup /opt/zeronet/ZeroNet-master
+sudo rm $ORIG_LOCATION
+sudo mv /opt/zeronet/ZeroNet-master-backup $ORIG_LOCATION
 echo " " | sudo tee /etc/fstab 
 }
 
-function checkZeronet() {
+function checkZeronetMount() {
+ DEV=$(echo $1 | sed -e "s|^/dev/||")
+ if mount | grep $DEV ; then
+   MOUNTED_ON=$(mount | grep $DEV | awk '{print $3}')
+   if [ "$MOUNTED_ON/ZeroNet-master" == $(readlink "$ORIG_LOCATION") ]; then
+     return 0
+   else
+     return 1
+   fi
+ else
+   return 1
+ fi
+}
+
+function checkZeronetLink() {
  DEV=$1
+ if [ -L "$ORIG_LOCATION" ]; then
+  if checkZeronetMount $DEV; then
+    return 0
+  else
+    return 1
+  fi
+ else 
+   return 1
+ fi
+}
+
+function checkZeronet() {
+ DEV=$(echo $1 | sed -e "s|^/dev/||")
  TMPMNT=$(mktemp -d)
- mount_partitions $DEV $TMPMNT
+ mountPartitions $DEV $TMPMNT
  if [ -d "$TMPMNT/ZeroNet-master" ]; then
     umount $TMPMNT
-    return 0
+    if checkZeronetLink $DEV; then
+      echo "external"
+    else
+      echo "not linked"
+    fi
  else 
     umount $TMPMNT
-    return 1
+    echo "internal"
  fi
 }
 
@@ -159,6 +190,8 @@ elif [[ ("$1" == "--get-size" || "$1" == "-s") &&  ! -z "$2" ]] ; then
    getSize $2
 elif [[ ("$1" == "--list-json" || "$1" == "-j") ]] ; then
    listJson
+elif [[ ("$1" == "--check-zeronet" || "$1" == "-c") &&  ! -z "$2" ]] ; then
+   checkZeronet $2
 else
   show_menu
 fi
