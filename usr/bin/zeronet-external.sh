@@ -154,7 +154,7 @@ function listJson() {
      echo $JSON
      exit 0
   fi
-  JSON="$JSON { \"name\": \"${vars[i]}\", \"dev\": \"/dev/${vars[i]}\", \"size\": \"$(getSize ${vars[i]})\", \"fs\": \"$(getFs ${vars[i]})\" }"
+  JSON="$JSON { \"name\": \"${vars[i]}\", \"dev\": \"/dev/${vars[i]}\", \"size\": \"$(getSize ${vars[i]})\", \"fs\": \"$(getFs ${vars[i]})\", \"stat\": \"$(checkZeronet ${vars[i]})\" } "
   done
 }
 
