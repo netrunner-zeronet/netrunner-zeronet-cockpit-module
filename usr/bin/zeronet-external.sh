@@ -77,6 +77,14 @@ function checkSpace() {
   fi
 }
 
+function activate() {
+ INPUT_PART=$(echo $1 | sed -e "s|^/dev/||")
+ mountPartitions $INPUT_PART /mnt/zeronet-usb
+ setLocation /mnt/zeronet-usb/ZeroNet-master
+ add2fstab $INPUT_PART /mnt/zeronet-usb
+ echo "Configuration finished. Please restart Zeronet."
+}
+
 function install() {
  INPUT_PART=$(echo $1 | sed -e "s|^/dev/||")
  mountPartitions $INPUT_PART /mnt/zeronet-usb
@@ -192,6 +200,8 @@ elif [[ ("$1" == "--list-json" || "$1" == "-j") ]] ; then
    listJson
 elif [[ ("$1" == "--check-zeronet" || "$1" == "-c") &&  ! -z "$2" ]] ; then
    checkZeronet $2
+elif [[ "$1" == "-a" ]] && [[ ! -z "$2" ]]; then
+  activate $2
 else
   show_menu
 fi
