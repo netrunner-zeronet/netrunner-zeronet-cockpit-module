@@ -92,6 +92,34 @@ function checkUsb_success(data) {
   }
 }
 
+function linkTo(dev) {
+  console.log("Called link to : " + dev.id)
+  if (isRunning) {
+   zeronet_stop()
+  }
+  var linkProc = cockpit.spawn(["zeronet-external.sh", "-a", dev.id]);
+  stat.css("color", "yellow");
+  stat.text("Activation running...");
+  btn.hide();
+  document.getElementById(dev.id).style.visibility="hidden";
+  linkProc.done(link_success);
+  linkProc.fail(link_fail);
+}
+
+function unlinkFrom(dev) {
+  console.log("Called link to : " + dev.id)
+  if (isRunning) {
+   zeronet_stop()
+  }
+  var unlinkProc = cockpit.spawn(["zeronet-external.sh", "-u"]);
+  stat.css("color", "yellow");
+  stat.text("Deactivation running...");
+  btn.hide();
+  document.getElementById(dev.id).style.visibility="hidden";
+  unlinkProc.done(unlink_success);
+  unlinkProc.fail(unlink_fail);
+}
+
 function migrateTo(dev) {
   console.log("Called migrate to : " + dev.id)
   if (isRunning) {
@@ -118,6 +146,30 @@ function migrate_fail() {
   btn.show();
 }
 
+function link_success() {
+  stat.css("color", "green");
+  stat.text("Activation completed.");
+  btn.show();
+}
+
+function link_fail() {
+  stat.css("color", "red");
+  stat.text("Activation failed.");
+  btn.show();
+}
+
+function unlink_success() {
+  stat.css("color", "green");
+  stat.text("Deactivation completed.");
+  btn.show();
+}
+
+function unlink_fail() {
+  stat.css("color", "red");
+  stat.text("Deactivation failed.");
+  btn.show();
+}
+
 function checkUsb_fail() {
   console.log("no usb devices detected!")
 }
@@ -132,6 +184,12 @@ function createUSB_dev_header(text) {
 }
 function createMigrateButton(type,id,name) {
   return "<button class=\"btn btn-default btn-" + type + "\" id=\""+ id + "\" onClick=\"migrateTo("+id+")\">" + name + "</button>"
+}
+function createLinkButton(type,id,name) {
+  return "<button class=\"btn btn-default btn-" + type + "\" id=\""+ id + "\" onClick=\"linkTo("+id+")\">" + name + "</button>"
+}
+function createUnlinkButton(type,id,name) {
+  return "<button class=\"btn btn-default btn-" + type + "\" id=\""+ id + "\" onClick=\"unlinkFrom("+id+")\">" + name + "</button>"
 }
 // END of UI Creation functions
 
@@ -162,10 +220,23 @@ function createUI_USB_devices() {
 
         deviceHtml += "<table class=\"table\">"
         deviceHtml += "<tr><td><img src=\"usbdev.png\"></td>"
-        if (usbDisks.disks[k].fs.indexOf("ext") != -1 || usbDisks.disks[k].fs.indexOf("xfs") != -1 ||
-        usbDisks.disks[k].fs.indexOf("btrfs") != -1 ||  usbDisks.disks[k].fs.indexOf("ntfs") != -1) {
+        if ((usbDisks.disks[k].fs.indexOf("ext") != -1 || usbDisks.disks[k].fs.indexOf("xfs") != -1 ||
+        usbDisks.disks[k].fs.indexOf("btrfs") != -1 ||  usbDisks.disks[k].fs.indexOf("ntfs") != -1) &&
+        usbDisks.disks[k].stat.indexOf("internal") != -1) {
            deviceHtml += "<td><p>Filesystem: " + usbDisks.disks[k].fs + "&nbsp;&nbsp;\
                      </p></td><td><p>Size: " + usbDisks.disks[k].size + "</p></td><td>" + createMigrateButton("secondary",usbDisks.disks[k].name,"Migrate Zeronet here") + "</td></tr>"
+        }
+        else if ((usbDisks.disks[k].fs.indexOf("ext") != -1 || usbDisks.disks[k].fs.indexOf("xfs") != -1 ||
+        usbDisks.disks[k].fs.indexOf("btrfs") != -1 ||  usbDisks.disks[k].fs.indexOf("ntfs") != -1) &&
+        usbDisks.disks[k].stat.indexOf("not linked") != -1) {
+           deviceHtml += "<td><p>Filesystem: " + usbDisks.disks[k].fs + "&nbsp;&nbsp;\
+                     </p></td><td><p>Size: " + usbDisks.disks[k].size + "</p></td><td>" + createLinkButton("secondary",usbDisks.disks[k].name,"Use Zeronet from here") + "</td></tr>"
+        }
+        else if ((usbDisks.disks[k].fs.indexOf("ext") != -1 || usbDisks.disks[k].fs.indexOf("xfs") != -1 ||
+        usbDisks.disks[k].fs.indexOf("btrfs") != -1 ||  usbDisks.disks[k].fs.indexOf("ntfs") != -1) &&
+        usbDisks.disks[k].stat.indexOf("external") != -1) {
+           deviceHtml += "<td><p>Filesystem: " + usbDisks.disks[k].fs + "&nbsp;&nbsp;\
+                     </p></td><td><p>Size: " + usbDisks.disks[k].size + "</p></td><td>" + createUnlinkButton("secondary",usbDisks.disks[k].name,"Disable usage of Zeronet from here") + "</td></tr>"
         }
         else 
             deviceHtml += "<td><p>Filesystem: " + usbDisks.disks[k].fs + "&nbsp;&nbsp;\
