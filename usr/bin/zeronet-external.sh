@@ -107,7 +107,7 @@ echo " " | sudo tee /etc/fstab
 
 function checkZeronetMount() {
  DEV=$(echo $1 | sed -e "s|^/dev/||")
- if mount | grep $DEV ; then
+ if mount | grep $DEV 2>&1>/dev/null ; then
    MOUNTED_ON=$(mount | grep $DEV | awk '{print $3}')
    if [ "$MOUNTED_ON/ZeroNet-master" == $(readlink "$ORIG_LOCATION") ]; then
      return 0
@@ -134,10 +134,14 @@ function checkZeronetLink() {
 
 function checkZeronet() {
  DEV=$(echo $1 | sed -e "s|^/dev/||")
- TMPMNT=$(mktemp -d)
- mountPartitions $DEV $TMPMNT
+ CHK_MNT=$(mount | grep $DEV | grep /mnt/zeronet-usb | awk '{print $1}' | sed -e "s|^/dev/||")
+ if [ "$DEV" != "$CHK_MNT" ]; then
+   TMPMNT=$(mktemp -d)
+   mountPartitions $DEV $TMPMNT
+ else
+   TMPMNT=/mnt/zeronet-usb
+ fi
  if [ -d "$TMPMNT/ZeroNet-master" ]; then
-    umount $TMPMNT
     if checkZeronetLink $DEV; then
       echo "external"
     else
@@ -146,6 +150,9 @@ function checkZeronet() {
  else 
     umount $TMPMNT
     echo "internal"
+ fi
+ if [ "$TMPMNT" != "/mnt/zeronet-usb" ]; then 
+   umount $TMPMNT
  fi
 }
 
