@@ -138,36 +138,42 @@ function migrate_success() {
   stat.css("color", "green");
   stat.text("Migration completed.");
   btn.show();
+  checkUsbDrive();
 }
 
 function migrate_fail() {
   stat.css("color", "red");
   stat.text("Migration failed.");
   btn.show();
+  checkUsbDrive();
 }
 
 function link_success() {
   stat.css("color", "green");
   stat.text("Activation completed.");
   btn.show();
+  checkUsbDrive();
 }
 
 function link_fail() {
   stat.css("color", "red");
   stat.text("Activation failed.");
   btn.show();
+  checkUsbDrive();
 }
 
 function unlink_success() {
   stat.css("color", "green");
   stat.text("Deactivation completed.");
   btn.show();
+  checkUsbDrive();
 }
 
 function unlink_fail() {
   stat.css("color", "red");
   stat.text("Deactivation failed.");
   btn.show();
+  checkUsbDrive();
 }
 
 function checkUsb_fail() {
@@ -179,7 +185,7 @@ function createButton(type,id,name) {
   return "<button class=\"btn btn-default btn-" + type + "\" id=\""+ id + "\">" + name + "</button>"
 }
 function createUSB_dev_header(text) {
-  return "<br/><div id=\"usbHeader\" class=\"panel panel-default\"><div class=\"panel-heading\">\
+  return "<br/><div id=\"usbHeader " + text + "\" class=\"panel panel-default\"><div class=\"panel-heading\">\
     <b>USB Device: " + text + "</b></span></div></div>"
 }
 function createMigrateButton(type,id,name) {
@@ -213,7 +219,11 @@ function createUI_USB_devices() {
   if (usbDisks.disks.length != 0) {
 
      var mainC = document.getElementById('main-container');
-     var deviceHtml = "";
+     if (document.contains(document.getElementById("usbDevs"))) {
+            document.getElementById("usbDevs").innerHTML = "";
+            document.getElementById("usbDevs").remove();
+     }
+     var deviceHtml = "<div id=usbDevs>";
 
      for (var k=0; k<usbDisks.disks.length; k++) {
         deviceHtml += createUSB_dev_header(usbDisks.disks[k].name + "  (" + usbDisks.disks[k].dev + ")")
@@ -245,6 +255,7 @@ function createUI_USB_devices() {
             deviceHtml += "</table>"
             console.debug("Found usb device: " + usbDisks.disks[k].name + " with filesystem: " + usbDisks.disks[k].fs);
         }
+        deviceHtml += "</div>"
         mainC.insertAdjacentHTML('beforeend', deviceHtml);
   }
 }
