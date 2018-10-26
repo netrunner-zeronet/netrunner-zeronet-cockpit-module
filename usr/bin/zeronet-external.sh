@@ -3,6 +3,7 @@
 BLOCK_DEVICES=$(lsblk -p -S -o  NAME,TRAN  | grep usb | awk '{print $1}')
 ORIG_LOCATION=/opt/zeronet/ZeroNet-master
 PLASMA_CONFIG_LOCATION=~/.config/plasma-org.kde.plasma.desktop-appletsrc
+TMPMNT=""
 
 function setLocation() {
   LOC=$1
@@ -148,11 +149,12 @@ function checkZeronet() {
       echo "not linked"
     fi
  else 
-    umount $TMPMNT
+    sudo umount $TMPMNT 
     echo "internal"
  fi
  if [ "$TMPMNT" != "/mnt/zeronet-usb" ]; then 
-   umount $TMPMNT
+   sudo umount $TMPMNT 
+   sudo rmdir $TMPMNT
  fi
 }
 
@@ -212,5 +214,3 @@ elif [[ "$1" == "-a" ]] && [[ ! -z "$2" ]]; then
 else
   show_menu
 fi
-
-exit 0
