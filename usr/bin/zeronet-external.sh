@@ -12,14 +12,19 @@ function setLocation() {
   #sleep 2;
   #sed -i -e "s|^zeronetLocation\[\$e\]=.*\$|zeronetLocation[\$e]=$LOC|" $PLASMA_CONFIG_LOCATION
   # Linking instead
-  sudo mv $ORIG_LOCATION{,-backup}
+  if [ ! -d $ORIG_LOCATION-backup ]; then
+    sudo mv $ORIG_LOCATION{,-backup}
+  fi
   sudo ln -s $LOC $ORIG_LOCATION
 }
 
 function cpZeronet() {
   NEW_LOCATION=$1
+  if [ ! -d $NEW_LOCATION ]; then
+    mkdir -p $NEW_LOCATION
+  fi
   echo "Copying Zeronet to new location: $NEW_LOCATION ..."
-  sudo cp -a $ORIG_LOCATION $NEW_LOCATION
+  sudo cp -a $ORIG_LOCATION/* $NEW_LOCATION
 }
 
 function showPartitions() {
@@ -78,7 +83,15 @@ function checkSpace() {
   fi
 }
 
+function umountZeronetUsb() {
+ if mount | grep "/mnt/zeronet-usb" 2>&1>/dev/null ; then
+   sudo umount /mnt/zeronet-usb 2>&1>/dev/null
+ fi
+}
+
 function activate() {
+ # Umount already mounted first
+ umountZeronetUsb
  INPUT_PART=$(echo $1 | sed -e "s|^/dev/||")
  mountPartitions $INPUT_PART /mnt/zeronet-usb
  setLocation /mnt/zeronet-usb/ZeroNet-master
@@ -88,12 +101,12 @@ function activate() {
 
 function install() {
  INPUT_PART=$(echo $1 | sed -e "s|^/dev/||")
- mountPartitions $INPUT_PART /mnt/zeronet-usb
+ TMPMNT=$(mktemp -d)
+ mountPartitions $INPUT_PART $TMPMNT
  if checkSpace /dev/$INPUT_PART; then
-   cpZeronet /mnt/zeronet-usb/
-   setLocation /mnt/zeronet-usb/ZeroNet-master
-   add2fstab $INPUT_PART /mnt/zeronet-usb
-   echo "Configuration finished. Please restart Zeronet."
+   cpZeronet $TMPMNT/ZeroNet-master
+   sudo umount $TMPMNT
+   activate $INPUT_PART
  else
    exit 1
  fi
@@ -188,7 +201,7 @@ case "$PARTS" in
       *$INPUT_PART*)
         add2fstab $INPUT_PART /mnt/zeronet-usb
         mountPartitions $INPUT_PART /mnt/zeronet-usb
-        cpZeronet /mnt/zeronet-usb/
+        cpZeronet /mnt/zeronet-usb/ZeroNet-master
         setLocation /mnt/zeronet-usb/ZeroNet-master
         ;;
       *) echo "Error. You can only enter one of the listed partitions" ;;
