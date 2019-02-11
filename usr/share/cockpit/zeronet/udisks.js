@@ -1,20 +1,7 @@
 
 class UDisks
 {
-    // can't to static const nor private..
-    static DBUS_OBJECT_MANAGER_INTERFACE = "org.freedesktop.DBus.ObjectManager";
 
-    static UDISKS2_SERVICE = "org.freedesktop.UDisks2";
-    static UDISKS2_PATH = "/org/freedesktop/UDisks2";
-
-    static UDISKS2_DRIVE_INTERFACE = "org.freedesktop.UDisks2.Drive";
-    static UDISKS2_BLOCK_INTERFACE = "org.freedesktop.UDisks2.Block";
-    static UDISKS2_FILESYSTEM_INTERFACE = "org.freedesktop.UDisks2.Filesystem";
-
-    _removableDriveAddedCbs = [];
-    _removableDriveRemovedCbs = [];
-
-    static _dbusClient = null;
     static dbusClient() {
         if (!UDisks._dbusClient) {
             UDisks._dbusClient = cockpit.dbus(UDisks.UDISKS2_SERVICE, {superuser: "try"});
@@ -23,7 +10,16 @@ class UDisks
     }
 
     constructor() {
+        // Can't do static class members in Firefox...
 
+        UDisks.DBUS_OBJECT_MANAGER_INTERFACE = "org.freedesktop.DBus.ObjectManager";
+
+        UDisks.UDISKS2_SERVICE = "org.freedesktop.UDisks2";
+        UDisks.UDISKS2_PATH = "/org/freedesktop/UDisks2";
+
+        UDisks.UDISKS2_DRIVE_INTERFACE = "org.freedesktop.UDisks2.Drive";
+        UDisks.UDISKS2_BLOCK_INTERFACE = "org.freedesktop.UDisks2.Block";
+        UDisks.UDISKS2_FILESYSTEM_INTERFACE = "org.freedesktop.UDisks2.Filesystem";
     }
 
     get removableDrives() {
@@ -88,10 +84,16 @@ class UDisks
     }
 
     onRemovableDriveAdded(cb) {
+        if (!this._removableDriveAddedCbs) {
+            this._removableDriveAddedCbs = [];
+        }
         this._removableDriveAddedCbs.push(cb);
     }
 
     onRemovableDriveRemoved(cb) {
+        if (!this._removableDriveRemovedCbs) {
+            this._removableDriveRemovedCbs = [];
+        }
         this._removableDriveRemovedCbs.push(cb);
     }
 }
@@ -99,9 +101,9 @@ class UDisks
 class UDisksDrive
 {
 
-    _partitions = [];
-
     constructor(nativePath, driveData) {
+        this._partitions = [];
+
         this._nativePath = nativePath;
         this._vendor = driveData.Vendor.v;
         this._model = driveData.Model.v;
@@ -116,10 +118,6 @@ class UDisksDrive
 
 class UDisksPartition
 {
-
-    _filesystemProxy = null;
-
-    _mountpointChangedCbs = [];
 
     constructor(nativePath) {
         this._nativePath = nativePath;
@@ -142,7 +140,10 @@ class UDisksPartition
 
     // TODO would be lovely to have a base class with this property and notification/event handling stuff
     onMountpointChanged(cb) {
-        _mountpointChangedCbs.push(cb);
+        if (!this._mountpointChangedCbs) {
+            this._mountpointChangedCbs = [];
+        }
+        this._mountpointChangedCbs.push(cb);
     }
 
     get freeSpace() {

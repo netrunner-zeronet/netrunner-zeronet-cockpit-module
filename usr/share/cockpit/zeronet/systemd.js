@@ -4,22 +4,25 @@ const DBUS_PROPERTIES_INTERFACE = "org.freedesktop.DBus.Properties";
 class Systemd
 {
 
-    static SYSTEMD1_SERVICE = "org.freedesktop.systemd1";
-    static SYSTEMD1_PATH = "/org/freedesktop/systemd1";
-
-    static SYSTEMD1_MANAGER_INTERFACE = "org.freedesktop.systemd1.Manager";
-    static SYSTEMD1_UNIT_INTERFACE = "org.freedesktop.systemd1.Unit";
-    static SYSTEMD1_JOB_INTERFACE = "org.freedesktop.systemd1.Job";
-
-    static dbusClient = cockpit.dbus(Systemd.SYSTEMD1_SERVICE, {superuser: "try"});
+    static dbusClient() {
+        if (!Systemd._dbusClient) {
+            Systemd._dbusClient = cockpit.dbus(Systemd.SYSTEMD1_SERVICE, {superuser: "try"});
+        }
+        return Systemd._dbusClient;
+    }
 
     constructor() {
+        Systemd.SYSTEMD1_SERVICE = "org.freedesktop.systemd1";
+        Systemd.SYSTEMD1_PATH = "/org/freedesktop/systemd1";
 
+        Systemd.SYSTEMD1_MANAGER_INTERFACE = "org.freedesktop.systemd1.Manager";
+        Systemd.SYSTEMD1_UNIT_INTERFACE = "org.freedesktop.systemd1.Unit";
+        Systemd.SYSTEMD1_JOB_INTERFACE = "org.freedesktop.systemd1.Job";
     }
 
     static dbusManager() {
         if (!Systemd._systemdManager) {
-            Systemd._systemdManager = Systemd.dbusClient.proxy(Systemd.SYSTEMD1_MANAGER_INTERFACE, Systemd.SYSTEMD1_PATH);
+            Systemd._systemdManager = Systemd.dbusClient().proxy(Systemd.SYSTEMD1_MANAGER_INTERFACE, Systemd.SYSTEMD1_PATH);
 
             Systemd._systemdManager.addEventListener("signal", (data) => {
                 //console.log("SDMANAGER SIGNAL", data);
@@ -72,35 +75,31 @@ class Systemd
 class SystemdUnit
 {
 
-    static _interestedProps = {
-        "Id": {
-
-        },
-        "Description": {
-
-        },
-        "SubState": {
-            changeCbs: "_subStateChangedCbs"
-        },
-        "CanStart": {
-
-        },
-        "CanStop": {
-
-        },
-        "CanReload": {
-
-        }
-    };
-
-    _dbusPropertiesProxy = null;
-
-    _subStateChangedCbs = [];
-
     constructor(dbusPath) {
         if (!dbusPath) {
             throw new TypeError("Cannot create SystemdUnit without dbusPath");
         }
+
+        SystemdUnit._interestedProps = {
+            "Id": {
+
+            },
+            "Description": {
+
+            },
+            "SubState": {
+                changeCbs: "_subStateChangedCbs"
+            },
+            "CanStart": {
+
+            },
+            "CanStop": {
+
+            },
+            "CanReload": {
+
+            }
+        };
 
         this._dbusPath = dbusPath;
 
@@ -108,7 +107,7 @@ class SystemdUnit
         // documentation says "data" contains only the changed properties
         // but I get back the entire proxy?!
 
-        this._dbusPropertiesProxy = Systemd.dbusClient.proxy(DBUS_PROPERTIES_INTERFACE, this._dbusPath);
+        this._dbusPropertiesProxy = Systemd.dbusClient().proxy(DBUS_PROPERTIES_INTERFACE, this._dbusPath);
 
         this._dbusPropertiesProxy.addEventListener("signal", (data) => {
             if (data.detail[1] === "PropertiesChanged" && data.detail[2][0] === Systemd.SYSTEMD1_UNIT_INTERFACE) {
@@ -172,7 +171,7 @@ class SystemdUnit
         return new Promise((resolve, reject) => {
             Systemd._systemdManager.call.apply(this, args).done((result) => {
 
-                var jobProxy = Systemd.dbusClient.proxy(Systemd.SYSTEMD1_JOB_INTERFACE, result[0]);
+                var jobProxy = Systemd.dbusClient().proxy(Systemd.SYSTEMD1_JOB_INTERFACE, result[0]);
                 jobProxy.wait(() => { console.log("PRXWT", jobProxy.valid); });
                 console.log("PRX", jobProxy, jobProxy.valid);
                 jobProxy.addEventListener("signal", (sig) =>  {
@@ -184,7 +183,7 @@ class SystemdUnit
 
                 jobProxy.onchanged = (sig) => { console.log("CHG NO LIST", sig); };
 
-                var jobPropertiesProxy = Systemd.dbusClient.proxy(DBUS_PROPERTIES_INTERFACE, result[0]);
+                var jobPropertiesProxy = Systemd.dbusClient().proxy(DBUS_PROPERTIES_INTERFACE, result[0]);
                 console.log("BLA", jobPropertiesProxy);
                 jobPropertiesProxy.addEventListener("signal", (sig) =>  {
                     console.log("PPSGI", sig);
@@ -202,6 +201,9 @@ class SystemdUnit
     }
 
     onSubStateChanged(cb) {
+        if (!this._subStateChangedCbs) {
+            this._subStateChangedCbs = [];
+        }
         this._subStateChangedCbs.push(cb);
     }
 
@@ -221,8 +223,6 @@ class SystemdUnit
 
 
             Object.keys(SystemdUnit._interestedProps).forEach((dbusProp) => {
-
-
 
                 var promise = new Promise((resolve, reject) => {
                     this._dbusPropertiesProxy.call("Get", [Systemd.SYSTEMD1_UNIT_INTERFACE, dbusProp]).done((result) => {

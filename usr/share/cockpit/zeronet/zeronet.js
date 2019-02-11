@@ -1,19 +1,20 @@
 
+const ZERONET_UNITNAME = "zeronet.service";
+
 class Zeronet
 {
 
-    static _unitName = "zeronet.service";
+    constructor() {
+        // Can't do static class members in Firefox...
+        this._systemd = new Systemd();
+        this._udisks = new UDisks();
 
-    _systemd = new Systemd();
-    _udisks = new UDisks();
-
-    _statusSpinner = $("#statusSpinner");
-    _statusLabel = $("#statusLabel");
-    _startStopBtn = $("#startStopBtn");
-    _openBtn = document.getElementById("openBtn");
-    _openSystemdBtn = document.getElementById("openSystemdBtn");
-
-    _zeronetUnit = null;
+        this._statusSpinner = $("#statusSpinner");
+        this._statusLabel = $("#statusLabel");
+        this._startStopBtn = $("#startStopBtn");
+        this._openBtn = document.getElementById("openBtn");
+        this._openSystemdBtn = document.getElementById("openSystemdBtn");
+    }
 
     setupUi() {
         $(this._statusSpinner).toggle(true);
@@ -132,7 +133,7 @@ class Zeronet
                 return resolve(this._zeronetUnit);
             }
 
-            this._systemd.getUnit(Zeronet._unitName).then((unit) => {
+            this._systemd.getUnit(ZERONET_UNITNAME).then((unit) => {
                 this._zeronetUnit = unit;
 
                 unit.onSubStateChanged(() => {
