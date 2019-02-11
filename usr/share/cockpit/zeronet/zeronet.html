@@ -8,32 +8,32 @@
 </head>
 <body>
     <div id="main-container" class="container-fluid" style='max-width: 650px'>
-            <p><br/></p>
-            <p><b>ZeroNet</b> is a decentralized web-like network of peer-to-peer users.<br/>
-    Instead of having an IP address, sites are identified by a public key (specifically a bitcoin address). <br/>
-    The private key allows the owner of a site to sign and publish change, which propagate through the network. <br/>
-    Sites can be accessed through an ordinary web browser when using the ZeroNet application, which acts <br/>
-    as a local webhost for such pages.<br/> 
-    In addition to using bitcoin cryptography, ZeroNet uses trackers from the BitTorrent network to negotiate <br/>
-    connections between peers. ZeroNet is anonymous by default, by hiding their IP address using the built in Tor-functionality.
+
     </p>
         <table class="cockpit-form-table">
             <tr>
                 <td><label class="control-label" for="status">Status:&nbsp;</label></td>
-                <td><label class="control-label" id="stat"></td>
+                <td><label class="control-label" id="statusLabel"></td>
                 <td><div id="statusSpinner" class="spinner spinner-md spinner-white"></div></td>
             </tr>
             <tr>
-                <td><button class="btn btn-default btn-primary" id="start">Start</button></td>
+                <td><button class="btn btn-default btn-primary" id="startStopBtn">Start</button></td>
                 <td>&nbsp;&nbsp;&nbsp;&nbsp;</td>
-                <td><button class="btn btn-default btn-primary" id="open">Open Zeronet</button></td>
+                <td><button class="btn btn-default btn-primary" id="openBtn">Open Zeronet</button></td>
             </tr>
             <tr><td>&nbsp;<br/></td></tr>
             <tr>
-                <td><button class="btn btn-default btn-secondary" id="openSystemd">Advanced Options</button></td>
+                <td><button class="btn btn-default btn-secondary" id="openSystemdBtn">Advanced Options</button></td>
             </tr>
         </table>
+
+        <div id="usbDevices">
+
+        </div>
+
     </div>
+    <script src="udisks.js"></script>
+    <script src="systemd.js"></script>
     <script src="zeronet.js"></script>
 </body>
 </html>
