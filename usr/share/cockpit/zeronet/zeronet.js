@@ -184,20 +184,57 @@ udisks.removableDrives.then((drives) => {
             var freeSpaceTd = document.createElement("td");
             partitionTable.appendChild(freeSpaceTd);
 
-            // TODO mount
+            // FIXME for debugging until we have proper status with buttons
+            var debugTd = document.createElement("td");
+            partitionTable.appendChild(debugTd);
 
-            partition.mount().then((result) => {
-                console.log("MAUNT", result);
+            // Helper promise that resolves immediately if mounted or mounts first
+            new Promise((resolve, reject) => {
+                if (partition.mounted) {
+                    return resolve();
+                }
+
+                partition.mount().then(resolve, reject);
+            }).then((foo) => {
+
+                partition.freeSpace.then((freeSpace) => {
+                    freeSpaceTd.innerText = `Free: ${freeSpace}`;
+                }, (err) => {
+                    console.warn("Failed to get free space for", partition.device, "on", partition.mountpoint, err);
+                    freeSpaceTd.innerText = "Free: ???";
+                });
+
+                // FIXME check multiple locations on a drive
+                // perhaps just list all with "ZeroNet-master" name
+                // and also take into account the /opt sdcard thing
+
+                var path = partition.mountpoint + "/ZeroNet-master";
+                StorageUtils.dirExists(path).then((exists) => {
+                    console.log("has zeronet here", exists);
+
+                    if (!exists) {
+                        debugTd.innerText += "no zeronet here";
+                        return;
+                    }
+
+                    // Now check how large the folder is
+                    StorageUtils.diskUsage(path).then((usage) => {
+                        debugTd.innerText += "have zeronet of size " + usage;
+                    }, (err) => {
+                        console.warn("Failed to determine usage on", path, err);
+                        debugTd.innerText += "failed to determine size of zeronet folder";
+                    });
+
+                }, (err) => {
+                    console.warn("Failed to determine zeronet status on", partition.mountpoint, err);
+                    debugTd.innerText += "failed to determine existance";
+                });
+
             }, (err) => {
                 console.warn("Failed to mount", err);
             });
 
-            partition.freeSpace.then((freeSpace) => {
-                freeSpaceTd.innerText = `Free: ${freeSpace}`;
-            }, (err) => {
-                console.warn("Failed to get free space for", partition.device, "on", partition.mountpoint, err);
-                freeSpaceTd.innerText = "Free: ???";
-            });
+
 
             var buttonTd = document.createElement("td");
 
