@@ -1,5 +1,6 @@
 
 const ZERONET_UNITNAME = "zeronet.service";
+const SUPPORTED_FILESYSTEMS = ["ext3", "ext4", "xfs", "btrfs", "ntfs"];
 
 class Zeronet
 {
@@ -156,12 +157,30 @@ zeronet.checkStatus();
 
 var udisks = new UDisks();
 
-udisks.removableDrives.then((drives) => {
+udisks.onDriveRemoved((drivePath) => {
+    console.log("DRIVE REMOVED", drivePath);
+});
+
+udisks.onDriveAdded((drive) => {
+    console.log("DRIVE ADDED", drive);
+
+    drive.partitions.then((parts) => {
+        console.log("has parts", parts);
+    }, (err) => {
+        console.warn("failed to get parts for new drive", err);
+    });
+});
+
+udisks.drives.then((drives) => {
 
     var usbDevices = document.getElementById("usbDevices");
     usbDevices.innerHtml = ""; // clear
 
     drives.forEach((drive) => {
+        if (!drive.removable) {
+            return; // continue
+        }
+
         var headerDiv = document.createElement("div");
         headerDiv.className = "panel panel-default";
         headerDiv.innerHTML = `<div class='panel-heading'><b>USB Device: ${drive.vendor} ${drive.model}</b></div>`;
@@ -170,94 +189,100 @@ udisks.removableDrives.then((drives) => {
         var partitionTable = document.createElement("table");
         partitionTable.className = "table";
 
-        drive.partitions.forEach((partition) => {
-            var partitionTr = document.createElement("tr");
+        drive.partitions.then((partitions) => {
 
-            partitionTr.innerHTML = `
-                <td><img src='usbdev.png'></td>
-                <td>Device: ${partition.device}</td>
-                <td>File System: ${partition.filesystem}</td>
-                <td>Size: ${LocaleUtils.formatSize(partition.size)}</td>`;
+            partitions.forEach((partition) => {
+                var partitionTr = document.createElement("tr");
 
-            partitionTable.appendChild(partitionTr);
+                partitionTr.innerHTML = `
+                    <td><img src='usbdev.png'></td>
+                    <td>Device: ${partition.device}</td>
+                    <td>File System: ${partition.filesystem}</td>
+                    <td>Size: ${LocaleUtils.formatSize(partition.size)}</td>`;
 
-            // Created dynamically so we can keep a reference and update once the freeSpace promise finishes
-            var freeSpaceTd = document.createElement("td");
-            partitionTable.appendChild(freeSpaceTd);
+                partitionTable.appendChild(partitionTr);
 
-            // FIXME for debugging until we have proper status with buttons
-            var debugTd = document.createElement("td");
-            partitionTable.appendChild(debugTd);
+                // Created dynamically so we can keep a reference and update once the freeSpace promise finishes
+                var freeSpaceTd = document.createElement("td");
+                partitionTable.appendChild(freeSpaceTd);
 
-            // Helper promise that resolves immediately if mounted or mounts first
-            new Promise((resolve, reject) => {
-                if (partition.mounted) {
-                    return resolve();
+                // FIXME for debugging until we have proper status with buttons
+                var debugTd = document.createElement("td");
+                partitionTable.appendChild(debugTd);
+
+                var supportedFilesystem = SUPPORTED_FILESYSTEMS.includes(partition.filesystem);
+                if (supportedFilesystem) {
+                    // Helper promise that resolves immediately if mounted or mounts first
+                    new Promise((resolve, reject) => {
+                        if (partition.mounted) {
+                            return resolve();
+                        }
+
+                        partition.mount().then(resolve, reject);
+                    }).then((foo) => {
+
+                        StorageUtils.diskFree(partition.mountpoint).then((freeSpace) => {
+                            freeSpaceTd.innerText = `Free: ${LocaleUtils.formatSize(freeSpace)}`;
+                        }, (err) => {
+                            console.warn("Failed to get free space for", partition.device, "on", partition.mountpoint, err);
+                            freeSpaceTd.innerText = "Free: ???";
+                        });
+
+                        // FIXME check multiple locations on a drive
+                        // perhaps just list all with "ZeroNet-master" name
+                        // and also take into account the /opt sdcard thing
+
+                        var path = partition.mountpoint + "/ZeroNet-master";
+                        StorageUtils.dirExists(path).then((exists) => {
+                            console.log("has zeronet here", exists);
+
+                            if (!exists) {
+                                debugTd.innerText += "no zeronet here";
+                                return;
+                            }
+
+                            // Now check how large the folder is
+                            StorageUtils.diskUsage(path).then((usage) => {
+                                debugTd.innerText += "have zeronet of size " + LocaleUtils.formatSize(usage);
+                            }, (err) => {
+                                console.warn("Failed to determine usage on", path, err);
+                                debugTd.innerText += "failed to determine size of zeronet folder";
+                            });
+
+                        }, (err) => {
+                            console.warn("Failed to determine zeronet status on", partition.mountpoint, err);
+                            debugTd.innerText += "failed to determine existance";
+                        });
+
+                    }, (err) => {
+                        console.warn("Failed to mount", err);
+                    });
+                } else {
+                    console.log("Unsupp fs");
                 }
 
-                partition.mount().then(resolve, reject);
-            }).then((foo) => {
+                var buttonTd = document.createElement("td");
 
-                partition.freeSpace.then((freeSpace) => {
-                    freeSpaceTd.innerText = `Free: ${LocaleUtils.formatSize(freeSpace)}`;
-                }, (err) => {
-                    console.warn("Failed to get free space for", partition.device, "on", partition.mountpoint, err);
-                    freeSpaceTd.innerText = "Free: ???";
-                });
+                // Buttons
+                partition._startHereButton = document.createElement("button");
+                partition._startHereButton.innerText = "Start";
+                //buttonTd.appendChild(partition._startHereButton);
 
-                // FIXME check multiple locations on a drive
-                // perhaps just list all with "ZeroNet-master" name
-                // and also take into account the /opt sdcard thing
+                partition._stopHereButton = document.createElement("button");
+                partition._stopHereButton.innerText = "Stop";
+                //buttonTd.appendChild(partition._stopHereButton);
 
-                var path = partition.mountpoint + "/ZeroNet-master";
-                StorageUtils.dirExists(path).then((exists) => {
-                    console.log("has zeronet here", exists);
+                partition._copyThisButton = document.createElement("button");
+                partition._copyThisButton.innerText = "Copy this ZeroNet elsewhere";
+                //buttonTd.appendChild(partition._copyThisButton);
 
-                    if (!exists) {
-                        debugTd.innerText += "no zeronet here";
-                        return;
-                    }
-
-                    // Now check how large the folder is
-                    StorageUtils.diskUsage(path).then((usage) => {
-                        debugTd.innerText += "have zeronet of size " + LocaleUtils.formatSize(usage);
-                    }, (err) => {
-                        console.warn("Failed to determine usage on", path, err);
-                        debugTd.innerText += "failed to determine size of zeronet folder";
-                    });
-
-                }, (err) => {
-                    console.warn("Failed to determine zeronet status on", partition.mountpoint, err);
-                    debugTd.innerText += "failed to determine existance";
-                });
-
-            }, (err) => {
-                console.warn("Failed to mount", err);
+                partitionTable.appendChild(buttonTd);
+                // Created dynamically so we can add and remove buttons
             });
-
-
-
-            var buttonTd = document.createElement("td");
-
-            partition._button = document.createElement("button");
-            partition._button.className = "btn btn-default btn-secondary";
-
-            buttonTd.appendChild(partition._button);
-
-            partitionTable.appendChild(buttonTd);
-            // Created dynamically so we can add and remove buttons
-
 
         });
 
         usbDevices.appendChild(partitionTable);
-
-        console.log("USB DRIVE:", drive.vendor, drive.model);
-
-        drive.partitions.forEach((partition) => {
-            console.log("  Partition", partition.label, "on", partition.device);
-        });
-
 
     });
 }, (err) => {

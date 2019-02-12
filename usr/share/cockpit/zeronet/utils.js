@@ -53,6 +53,34 @@ class StorageUtils
         });
     }
 
+    static diskFree(mountpoint) {
+        return new Promise((resolve, reject) => {
+            cockpit.spawn(["df", "-P", "-B 1", mountpoint], {superuser: true}).done((result) => {
+
+                var line = result.split("\n")[1];
+                if (!line) {
+                    return reject("No valid output");
+                }
+
+                // ouch...
+                var rx = /\w+\s*\d+\s+\d+\s+(\d+)/;
+
+                var freeSpace = line.match(rx)[1];
+                if (typeof freeSpace === undefined) {
+                    return reject("Failed to parse free space");
+                }
+
+                freeSpace = parseInt(freeSpace);
+                if (isNaN(freeSpace)) {
+                    return reject("Failed to converr freeSpace to number");
+                }
+
+                resolve(freeSpace);
+
+            }).fail(reject);
+        });
+    }
+
     static find(path, args) {
         var args = ["find", path];
 
@@ -80,7 +108,6 @@ class LocaleUtils
         // TODO what about i18n
         var suffixes = ["B", "kiB", "MiB", "GiB", "TiB"];
         var suffixIndex = 0;
-        console.log("SAISS", size);
         while (size > 1024) {
             size /= 1024;
             ++suffixIndex;

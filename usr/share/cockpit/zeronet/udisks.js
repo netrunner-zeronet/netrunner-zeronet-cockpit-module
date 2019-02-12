@@ -9,6 +9,13 @@ class UDisks
         return UDisks._dbusClient;
     }
 
+    static dbusObjectManager() {
+        if (!UDisks._dbusObjectManager) {
+            UDisks._dbusObjectManager = UDisks.dbusClient().proxy(UDisks.DBUS_OBJECT_MANAGER_INTERFACE, UDisks.UDISKS2_PATH);
+        }
+        return UDisks._dbusObjectManager;
+    }
+
     constructor() {
         // Can't do static class members in Firefox...
 
@@ -20,16 +27,75 @@ class UDisks
         UDisks.UDISKS2_DRIVE_INTERFACE = "org.freedesktop.UDisks2.Drive";
         UDisks.UDISKS2_BLOCK_INTERFACE = "org.freedesktop.UDisks2.Block";
         UDisks.UDISKS2_FILESYSTEM_INTERFACE = "org.freedesktop.UDisks2.Filesystem";
+
+        UDisks.dbusObjectManager().addEventListener("signal", (data) => {
+
+            var path = data.detail[2][0];
+            var interfaces = data.detail[2][1] || [];
+
+            switch (data.detail[1]) {
+            case "InterfacesAdded":
+
+                var driveData = interfaces[UDisks.UDISKS2_DRIVE_INTERFACE];
+                if (driveData !== undefined) {
+                    if (this._knownDriveDbusPaths && this._knownDriveDbusPaths.includes(path)) {
+                        console.log("Already know this drive", path);
+                        return;
+                    }
+
+                    if (!this._knownDriveDbusPaths) {
+                        this._knownDriveDbusPaths = [];
+                    }
+
+                    this._knownDriveDbusPaths.push(path);
+
+                    if (this._driveAddedCbs) {
+                        var udisksDrive = new UDisksDrive(path, driveData);
+
+                        this._driveAddedCbs.forEach((cb) => {
+                            cb(udisksDrive);
+                        });
+                    }
+                }
+                // TODO partitions somehow
+
+                break;
+
+            case "InterfacesRemoved":
+
+                if (this._knownDriveDbusPaths && this._knownDriveDbusPaths.includes(path)) {
+
+                    if (interfaces.includes(UDisks.UDISKS2_DRIVE_INTERFACE)) {
+
+                        // Remove from known paths...
+                        this._knownDriveDbusPaths = this._knownDriveDbusPaths.filter((item) => { item != path; });
+
+                        if (this._driveRemovedCbs) {
+                            this._driveRemovedCbs.forEach((cb) => {
+                                cb(path);
+                            });
+                        }
+                    }
+
+                }
+
+                break;
+
+            }
+        });
     }
 
-    get removableDrives() {
-        var udisks2_object_manager = UDisks.dbusClient().proxy(UDisks.DBUS_OBJECT_MANAGER_INTERFACE, UDisks.UDISKS2_PATH);
-
+    get drives() {
         return new Promise((resolve, reject) => {
-            udisks2_object_manager.call("GetManagedObjects").done((result) => {
+            UDisks.dbusObjectManager().call("GetManagedObjects").done((result) => {
                 var paths = result[0];
 
                 var drives = [];
+
+                if (!this._knownDriveDbusPaths) {
+                    this._knownDriveDbusPaths = [];
+                }
+
 
                 for (let path in paths) {
                     var info = paths[path];
@@ -39,62 +105,35 @@ class UDisks
                         continue;
                     }
 
-                    if (!drive.MediaRemovable.v) {
-                        continue;
-                    }
+                    this._knownDriveDbusPaths.push(path);
 
                     var udisksDrive = new UDisksDrive(path, drive);
 
-                    // Now collect all the partitions
-                    for (let partitionPath in paths) {
-                        var info = paths[partitionPath];
-
-                        var fs = info[UDisks.UDISKS2_FILESYSTEM_INTERFACE];
-                        var block = info[UDisks.UDISKS2_BLOCK_INTERFACE];
-                        if (!fs || !block) {
-                            continue;
-                        }
-
-                        if (block.Drive.v != path) {
-                            continue;
-                        }
-
-                        var partition = new UDisksPartition(partitionPath);
-                        partition._device = atob(block.Device.v);
-                        partition._label = block.HintName.v || block.IdLabel.v,
-                        partition._filesystem = block.IdType.v,
-                        partition._size = block.Size.v,
-                        partition._mountpoint = fs.MountPoints.v.map((base64) => {
-                                return atob(base64);
-                        })[0] || "";
-
-                        udisksDrive._partitions.push(partition);
-                    }
+                    udisksDrive._processPartitions(paths);
 
                     drives.push(udisksDrive);
                 }
-
-                // Now collect all partitions that belong to the the media we're interested in
-                var interestingPartitions = [];
-
 
                 resolve(drives);
             }).fail(reject);
         });
     }
 
-    onRemovableDriveAdded(cb) {
-        if (!this._removableDriveAddedCbs) {
-            this._removableDriveAddedCbs = [];
+    // Would be lovely if we could also detect adding/removing of partitions
+    // but let's keep it "simple"
+
+    onDriveAdded(cb) {
+        if (!this._driveAddedCbs) {
+            this._driveAddedCbs = [];
         }
-        this._removableDriveAddedCbs.push(cb);
+        this._driveAddedCbs.push(cb);
     }
 
-    onRemovableDriveRemoved(cb) {
-        if (!this._removableDriveRemovedCbs) {
-            this._removableDriveRemovedCbs = [];
+    onDriveRemoved(cb) {
+        if (!this._driveRemovedCbs) {
+            this._driveRemovedCbs = [];
         }
-        this._removableDriveRemovedCbs.push(cb);
+        this._driveRemovedCbs.push(cb);
     }
 }
 
@@ -102,18 +141,66 @@ class UDisksDrive
 {
 
     constructor(nativePath, driveData) {
-        this._partitions = [];
-
         this._nativePath = nativePath;
         this._vendor = driveData.Vendor.v;
         this._model = driveData.Model.v;
+        this._removable = driveData.Removable.v;
     }
 
     get nativePath() { return this._nativePath; }
     get vendor() { return this._vendor; }
     get model() { return this._model; }
 
-    get partitions() { return this._partitions; }
+    get removable() { return this._removable; }
+
+    get partitions() {
+        return new Promise((resolve, reject) => {
+            if (this._partitions) {
+                return resolve(this._partitions);
+            }
+
+            // FIXME doesn't work when doing it right after getting the newly added drive
+            // as the interfaces for the partitions have not yet been set up...
+            UDisks.dbusObjectManager().call("GetManagedObjects").done((result) => {
+                this._processPartitions(result[0]);
+                resolve(this._partitions);
+            }).fail(reject);
+        });
+    }
+
+    // Called by UDisks when enumerating all devices
+    // where we already did a callt o GetManagedObjects
+    // so that we avoid doing the same thing again here
+    _processPartitions(managedObjects) {
+        // Now collect all the partitions
+        for (let path in managedObjects) {
+            var info = managedObjects[path];
+
+            var fs = info[UDisks.UDISKS2_FILESYSTEM_INTERFACE];
+            var block = info[UDisks.UDISKS2_BLOCK_INTERFACE];
+            if (!fs || !block) {
+                continue;
+            }
+
+            if (block.Drive.v != this._nativePath) {
+                continue;
+            }
+
+            var partition = new UDisksPartition(path);
+            partition._device = atob(block.Device.v);
+            partition._label = block.HintName.v || block.IdLabel.v,
+            partition._filesystem = block.IdType.v,
+            partition._size = block.Size.v,
+            partition._mountpoint = fs.MountPoints.v.map((base64) => {
+                    return atob(base64);
+            })[0] || "";
+
+            if (!this._partitions) {
+                this._partitions = [];
+            }
+            this._partitions.push(partition);
+        }
+    }
 }
 
 class UDisksPartition
@@ -146,40 +233,6 @@ class UDisksPartition
         this._mountpointChangedCbs.push(cb);
     }
 
-    get freeSpace() {
-        return new Promise((resolve, reject) => {
-
-            if (this._freeSpace !== undefined) {
-                return resolve(this._freeSpace);
-            }
-
-            if (!this.mountpoint) {
-                return reject("No mountpoint");
-            }
-
-            // FIXME size of udisks and df free is in different units
-            var proc = cockpit.spawn(["df", "-P", "-B 1", this.mountpoint], {superuser: true});
-            proc.done((data) => {
-                var line = data.split("\n")[1];
-                if (!line) {
-                    return reject("No valid output");
-                }
-
-                // ouch...
-                var rx = /\w+\s*\d+\s+\d+\s+(\d+)/;
-
-                var freeSpace = line.match(rx)[1];
-                if (typeof freeSpace === undefined) {
-                    return reject("Failed to parse free space");
-                }
-
-                this._freeSpace = freeSpace;
-                resolve(freeSpace);
-            });
-            proc.fail(reject);
-        });
-    }
-
     mount() {
         return new Promise((resolve, reject) => {
             this._filesystemProxy.call("Mount", [{}]).done((result) => {
@@ -196,7 +249,28 @@ class UDisksPartition
     }
 
     invalidate() {
-        this._freeSpace = undefined;
+
+    }
+
+    _updateProps(data) {
+        var props = {
+            "Device": {
+                field: "_device",
+                modifier: atob
+            },
+            "Label": {
+                field: "_label",
+                fallback: "IdLabel"
+            },
+            "IdType": {
+                field: "_filesystem"
+            },
+            "MountPoints": {
+                field: "_mountpint",
+                notifier: this._mountpointChangedCbs,
+                modifier: atob
+            }
+        }
     }
 }
 
