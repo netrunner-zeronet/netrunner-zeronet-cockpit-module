@@ -177,7 +177,7 @@ udisks.removableDrives.then((drives) => {
                 <td><img src='usbdev.png'></td>
                 <td>Device: ${partition.device}</td>
                 <td>File System: ${partition.filesystem}</td>
-                <td>Size: ${partition.size}</td>`;
+                <td>Size: ${LocaleUtils.formatSize(partition.size)}</td>`;
 
             partitionTable.appendChild(partitionTr);
 
@@ -199,7 +199,7 @@ udisks.removableDrives.then((drives) => {
             }).then((foo) => {
 
                 partition.freeSpace.then((freeSpace) => {
-                    freeSpaceTd.innerText = `Free: ${freeSpace}`;
+                    freeSpaceTd.innerText = `Free: ${LocaleUtils.formatSize(freeSpace)}`;
                 }, (err) => {
                     console.warn("Failed to get free space for", partition.device, "on", partition.mountpoint, err);
                     freeSpaceTd.innerText = "Free: ???";
@@ -220,7 +220,7 @@ udisks.removableDrives.then((drives) => {
 
                     // Now check how large the folder is
                     StorageUtils.diskUsage(path).then((usage) => {
-                        debugTd.innerText += "have zeronet of size " + usage;
+                        debugTd.innerText += "have zeronet of size " + LocaleUtils.formatSize(usage);
                     }, (err) => {
                         console.warn("Failed to determine usage on", path, err);
                         debugTd.innerText += "failed to determine size of zeronet folder";

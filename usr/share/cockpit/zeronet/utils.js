@@ -72,3 +72,23 @@ class StorageUtils
     }
 
 }
+
+class LocaleUtils
+{
+
+    static formatSize(size) {
+        // TODO what about i18n
+        var suffixes = ["B", "kiB", "MiB", "GiB", "TiB"];
+        var suffixIndex = 0;
+        console.log("SAISS", size);
+        while (size > 1024) {
+            size /= 1024;
+            ++suffixIndex;
+        }
+
+        var displaySize = Number(size.toFixed(1)).toLocaleString();
+
+        return displaySize + " " + suffixes[suffixIndex];
+    }
+
+}
