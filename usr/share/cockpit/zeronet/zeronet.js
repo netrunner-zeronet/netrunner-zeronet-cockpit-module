@@ -359,10 +359,9 @@ class ZeronetPartition extends ZeronetPartitionTemplate
         if (drive.mediaCompatibility.some((item) => {
             return ["flash_sd", "flash_sdhc", "flash_mmc", "flash_sdxc"].includes(item);
         })) {
-            console.log("IS SD");
             this.icon = "sdcard";
-        } else if (this.connectionBus === "usb") {
-            this.icon = "usbdrive";
+        } else if (drive.connectionBus === "usb") {
+            this.icon = "usbdev";
         } else {
             this.icon = "hdd";
         }
