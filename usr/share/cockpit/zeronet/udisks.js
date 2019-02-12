@@ -144,14 +144,21 @@ class UDisksDrive
         this._nativePath = nativePath;
         this._vendor = driveData.Vendor.v;
         this._model = driveData.Model.v;
+        this._connectionBus = driveData.ConnectionBus.v;
         this._removable = driveData.Removable.v;
+        this._media = driveData.Media.v;
+        this._mediaCompatibility = driveData.MediaCompatibility.v;
+        console.log("Made drive", driveData);
     }
 
     get nativePath() { return this._nativePath; }
     get vendor() { return this._vendor; }
     get model() { return this._model; }
 
+    get connectionBus() { return this._connectionBus; }
     get removable() { return this._removable; }
+    get media() { return this._media; }
+    get mediaCompatibility() { return this._mediaCompatibility; }
 
     get partitions() {
         return new Promise((resolve, reject) => {
@@ -187,12 +194,17 @@ class UDisksDrive
             }
 
             var partition = new UDisksPartition(path);
-            partition._device = atob(block.Device.v);
+            partition._device = atob(block.Device.v).trim();
             partition._label = block.HintName.v || block.IdLabel.v,
             partition._filesystem = block.IdType.v,
             partition._size = block.Size.v,
             partition._mountpoint = fs.MountPoints.v.map((base64) => {
-                    return atob(base64);
+                var str = atob(base64);
+                // FIXME JS cannot deal with zero-terminated string here, manually removing \0...
+                if (str.charCodeAt(str.length - 1) === 0) {
+                    str = str.slice(0, -1);
+                }
+                return str;
             })[0] || "";
 
             if (!this._partitions) {
@@ -211,7 +223,7 @@ class UDisksPartition
 
         this._filesystemProxy = UDisks.dbusClient().proxy(UDisks.UDISKS2_FILESYSTEM_INTERFACE, nativePath);
         this._filesystemProxy.addEventListener("changed", (data) => {
-            console.log("Change in", nativePath, "is", data);
+            //console.log("Change in", nativePath, "is", data);
         });
     }
 

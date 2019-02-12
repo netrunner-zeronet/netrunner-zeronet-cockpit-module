@@ -99,12 +99,37 @@ class StorageUtils
         }).fail(reject);
     }
 
+    static move(source, destination) {
+        var args = ["mv", source, destination];
+
+
+    }
+
+    static symlinkTarget(path) {
+        return new Promise((resolve, reject) => {
+            var args = ["readlink", "-f" /*canonicalize*/, path];
+
+            cockpit.spawn(args, {superuser: true}).done((result) => {
+                resolve(result.trim());
+            }).fail((err) => {
+                if (err.exit_status === 1) { // not a symlink
+                    return resolve("");
+                }
+                reject(err);
+            });
+        });
+    }
+
 }
 
 class LocaleUtils
 {
 
     static formatSize(size) {
+        if (!size) {
+            size = 0;
+        }
+
         // TODO what about i18n
         var suffixes = ["B", "kiB", "MiB", "GiB", "TiB"];
         var suffixIndex = 0;
