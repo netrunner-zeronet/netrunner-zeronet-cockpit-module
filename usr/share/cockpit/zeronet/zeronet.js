@@ -107,11 +107,11 @@ class ZeronetPartitionTemplate
     <div class="list-view-pf-body">
         <div class="list-view-pf-description">
             <div class="list-group-item-heading">
-                <span data-id="heading">TEMPLATE HEADING</span>
-                <span data-id="heading-badge" class="label">TEMPLATE HEADING BADGE</span>
+                <span data-id="heading"></span>
+                <span data-id="heading-badge" class="label"></span>
                 <span data-id="busy-indicator" class="spinner spinner-sm spinner-inline"></span>
             </div>
-            <div class="list-group-item-text" data-id="text">TEMPLATE TEXT</div>
+            <div class="list-group-item-text" data-id="text"></div>
 
             <div class="progress progress-xs" data-id="progress-bar-container">
                 <div class="progress-bar" data-id="progress-bar"></div>
@@ -121,15 +121,15 @@ class ZeronetPartitionTemplate
         <div class="list-view-pf-additional-info">
             <div class="list-view-pf-additional-info-item" data-id="free-space-info-container">
                 <span class="pficon pficon-volume"></span>
-                <span data-id="free-space-info">TEMPLATE FREE SPACE</span>
+                <span data-id="free-space-info"></span>
             </div>
             <div class="list-view-pf-additional-info-item">
                 <span class="pficon pficon-cluster"></span>
-                <span data-id="filesystem-info">TEMPLATE FS INFO</span>
+                <span data-id="filesystem-info"></span>
             </div>
             <div class="list-view-pf-additional-info-item">
                 <span class="pficon pficon-network"></span>
-                <span data-id="zeronet-info">TEMPLATE ZERONET INFO</span>
+                <span data-id="zeronet-info"></span>
             </div>
         </div>
     </div>
@@ -373,6 +373,8 @@ class ZeronetPartition extends ZeronetPartitionTemplate
         let isSupportedFilesystem = SUPPORTED_FILESYSTEMS.includes(partition.filesystem);
         if (isSupportedFilesystem) {
 
+            this.busy = true;
+
             // Helper promise that resolves immediately if mounted or mounts first
             new Promise((resolve, reject) => {
                 if (partition.mounted) {
@@ -385,7 +387,7 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 StorageUtils.diskFree(partition.mountpoint).then((freeSpace) => {
                     this.freeSpace = freeSpace;
                 }, (err) => {
-                    console.warn("Failed to get free space for", partiton.device, "on", partition.mountpoint, err);
+                    console.warn("Failed to get free space for", partition.device, "on", partition.mountpoint, err);
                 });
 
                 // FIXME check multiple locations on a drive
@@ -428,9 +430,13 @@ class ZeronetPartition extends ZeronetPartitionTemplate
 
                 }, (err) => {
                     console.warn("Failed to determine zeronet existance on", partition.mountpoint, "which is", partition.device, "in", path, err);
+                    this.zeronet = "Failed to check for ZeroNet (" + err.message + ")";
                 });
             }, (err) => {
                 console.warn("Failed to mount", partition.device, err);
+                this.zeronet = "Failed to mount (" + err.message + ")";
+            }).finally(() => {
+                this.busy = false;
             });
 
         } else {
