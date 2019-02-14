@@ -195,9 +195,10 @@ class ZeronetPartitionTemplate
     }
 
     get icon() {
-        // TODO
+        return this._iconElement.dataset.icon;
     }
     set icon(icon) {
+        this._iconElement.dataset.icon = icon;
         this._iconElement.src = "style/" + icon + ".svg";
     }
 
@@ -305,6 +306,12 @@ class ZeronetPartitionTemplate
     set stopButtonVisible(visible) {
         this._stopButton.classList[visible ? "remove" : "add"]("hidden");
     }
+    get stopButtonEnabled() {
+        !this._stopButton.disabled;
+    }
+    set stopButtonEnabled(enable) {
+        this._stopButton.disabled = enable ? "" : "disabled";
+    }
     onStopButtonClicked(cb) {
         if (!this._stopButtonClickedCbs) {
             this._stopButtonClickedCbs = [];
@@ -321,6 +328,12 @@ class ZeronetPartitionTemplate
     }
     set copyButtonVisible(visible) {
         this._copyButton.classList[visible ? "remove": "add"]("hidden");
+    }
+    get copyButtonEnabled() {
+        !this._copyButton.disabled;
+    }
+    set copyButtonEnabled(enable) {
+        this._copyButton.disabled = enable ? "" : "disabled";
     }
     onCopyButtonClicked(cb) {
         if (!this._copyButtonClickedCbs) {
@@ -381,7 +394,10 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                     return resolve();
                 }
 
-                partition.mount().then(resolve, reject);
+                partition.mount().then(() => {
+                    partition.mountedForChecking = true;
+                    resolve();
+                }, reject);
             }).then(() => {
 
                 StorageUtils.diskFree(partition.mountpoint).then((freeSpace) => {
@@ -410,6 +426,10 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                         return;
                     }
 
+                    // TODO only when there's more than one partition
+                    this.copyButtonVisible = true;
+                    this.startButtonVisible = true;
+
                     StorageUtils.diskUsage(path).then((usage) => {
                         this.zeronet = `<strong>${LocaleUtils.formatSize(usage)}</strong> folder at ${path}`;
                     }, (err) => {
@@ -431,6 +451,19 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 }, (err) => {
                     console.warn("Failed to determine zeronet existance on", partition.mountpoint, "which is", partition.device, "in", path, err);
                     this.zeronet = "Failed to check for ZeroNet (" + err.message + ")";
+                }).finally(() => {
+                    // Unmount again after having checked
+                    // Give it some time to settle before trying to
+                    setTimeout(() => {
+                        if (partition.mountedForChecking && Zeronet.currentPartitionItem !== this) {
+                            partition.mountedForChecking = false;
+                            partition.unmount().then(() => {
+                                console.log("Unmounted", partition.device, "again");
+                            }, (err) => {
+                                console.warn("Failed to unmount", partition.device, "after checking for ZeroNet", err);
+                            });
+                        }
+                    }, 1000);
                 });
             }, (err) => {
                 console.warn("Failed to mount", partition.device, err);
@@ -444,13 +477,17 @@ class ZeronetPartition extends ZeronetPartitionTemplate
         }
     }
 
+    get hasZeronet() {
+
+    }
+
     get status() {
         return this._status;
     }
     set status(status) {
         this.busy = false;
-        this.startButtonVisible = false;
-        this.stopButtonVisible = false;
+        //this.startButtonVisible = false;
+        //this.stopButtonVisible = false;
 
         this.headingBadgeType = "";
 
@@ -475,12 +512,12 @@ class ZeronetPartition extends ZeronetPartitionTemplate
         case "running":
             this.headingBadge = "Running";
             this.headingBadgeType = "success";
-            this.stopButtonVisible = true;
+            //this.stopButtonVisible = true;
             break;
         case "failed":
         case "dead":
             this.headingBadge = "";//"Not running";
-            this.startButtonVisible = true;
+            //this.startButtonVisible = true;
             break;
         default:
             throw new TypeError("Invalid ZeroNet state", status);
@@ -547,11 +584,12 @@ udisks.drives.then((drives) => {
                 zeronet.getUnit().then((unit) => {
 
                     uiPartiton.onStartButtonClicked(() => {
-                        unit.start().then(() => {
-                            console.log("Started unit");
-                        }, (err) => {
-                            console.log("error starting", err);
-                        });
+                        if (Zeronet.currentPartitionItem === uiPartiton) {
+                            unit.start();
+                            return;
+                        }
+
+                        alert("Starting ZeroNet other than the built-in one in /opt is not yet implemented");
                     });
 
                     uiPartiton.onStopButtonClicked(() => {
@@ -562,20 +600,44 @@ udisks.drives.then((drives) => {
                         });
                     });
 
-                    unit.onSubStateChanged((newState) => {
-                        console.log("SUBST CH", newState);
-                        if (Zeronet.currentPartitionItem === uiPartiton) {
-                            uiPartiton.status = newState; // FIXME what about not installed
-                        }
+                    uiPartiton.onCopyButtonClicked(() => {
+                        alert("Not yet implemented");
                     });
+
+                    var unitSubStateChanged = (newState) => {
+                        console.log("SUBST CH", newState);
+
+                        var isCurrent = (Zeronet.currentPartitionItem === uiPartiton);
+                        var isStopped = (newState === "failed" || newState === "dead");
+
+                        if (isCurrent) {
+                            uiPartiton.status = newState; // FIXME what about not installed
+                            uiPartiton.startButtonVisible = isStopped;
+                            uiPartiton.stopButtonVisible = (newState === "running");
+                        }
+
+                        // When running, the current must be stopped before anything else can be done
+                        // like starting a different one or copying over
+                        uiPartiton.startButtonEnabled = isStopped;
+                        uiPartiton.copyButtonEnabled = isStopped;
+
+                        document.getElementById("openBtn").disabled = (newState === "running") ? "" : "disabled";
+                    };
+
+                    unit.onSubStateChanged(unitSubStateChanged);
+                    unitSubStateChanged(unit.subState);
 
                 }, (err) => {
                     console.warn("Failed to get unit", err);
                 });
 
 
-
-                devicesDiv.appendChild(uiPartiton.domElement);
+                // HACK to ensure sdcard comes first
+                if (uiPartiton.icon === "sdcard") { // TODO introduce type enum of some sort
+                    devicesDiv.insertBefore(uiPartiton.domElement, devicesDiv.firstChild);
+                } else {
+                    devicesDiv.appendChild(uiPartiton.domElement);
+                }
 
             });
 
@@ -597,11 +659,7 @@ Zeronet.onCurrentPartitionItemChanged((partitionItem, oldItem) => {
     zeronet.getUnit().then((unit) => {
         // FIXME disconnect "connection" when changes
         if (Zeronet.currentPartitionItem === partitionItem) {
-            if ((unit.subState === "failed" || unit.subState === "dead") && !unit.canStart) {
-                partitionItem.status = "notinstalled";
-            } else {
-                partitionItem.status = unit.subState;
-            }
+            partitionItem.status = unit.subState;
         }
     }).finally(() => {
         partitionItem.busy = false;
