@@ -34,7 +34,7 @@ class StorageUtils
 
     static diskUsage(path) {
         return new Promise((resolve, reject) => {
-            cockpit.spawn(["du", "-s", "-B 1", path], {superuser: true}).done((result) => {
+            cockpit.spawn(["du", "-sb", path], {superuser: true}).done((result) => {
                 var rx = /(\d+)\s+.*/;
 
                 var usage = result.match(rx)[1];
