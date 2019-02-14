@@ -138,7 +138,7 @@ class LocaleUtils
             ++suffixIndex;
         }
 
-        var displaySize = Number(size.toFixed(1)).toLocaleString();
+        var displaySize = Number(Math.round(size * 10) / 10).toFixed(1).toLocaleString();
 
         return displaySize + " " + suffixes[suffixIndex];
     }
