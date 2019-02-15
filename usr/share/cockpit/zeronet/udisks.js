@@ -248,7 +248,7 @@ class UDisksPartition
     }
 
     _setMountpoint(mountpoint) {
-        this._mountpint = mountpoint;
+        this._mountpoint = mountpoint;
         if (this._mountpointChangedCbs) {
             this._mountpointChangedCbs.forEach((cb) => {
                 cb(mountpoint);
@@ -300,7 +300,7 @@ class UDisksPartition
                 field: "_filesystem"
             },
             "MountPoints": {
-                field: "_mountpint",
+                field: "_mountpoint",
                 notifier: this._mountpointChangedCbs,
                 modifier: atob
             }
