@@ -195,6 +195,7 @@ class UDisksDrive
 
             var partition = new UDisksPartition(path);
             partition._device = atob(block.Device.v).trim();
+            partition._uuid = block.IdUUID.v;
             partition._label = block.HintName.v || block.IdLabel.v,
             partition._filesystem = block.IdType.v,
             partition._size = block.Size.v,
@@ -229,6 +230,7 @@ class UDisksPartition
 
     get nativePath() { return this._nativePath; }
     get device() { return this._device; }
+    get uuid() { return this._uuid; }
     get label() { return this._label; }
     get filesystem() { return this._filesystem; }
     get size() { return this._size; }
@@ -245,18 +247,38 @@ class UDisksPartition
         this._mountpointChangedCbs.push(cb);
     }
 
+    _setMountpoint(mountpoint) {
+        this._mountpint = mountpoint;
+        if (this._mountpointChangedCbs) {
+            this._mountpointChangedCbs.forEach((cb) => {
+                cb(mountpoint);
+            });
+        }
+    }
+
     mount() {
         return new Promise((resolve, reject) => {
-            this._filesystemProxy.call("Mount", [{}]).done((result) => {
-                this._mountpoint = result[0];
-                resolve(this._mountpoint);
-            }).fail(reject);
+            cockpit.user().done((user) => {
+
+                this._filesystemProxy.call("Mount", [{
+                    // Setting uid via udisks is not allowed :(
+                    /*options: {
+                        t: "s",
+                        v: "uid=" + user.id
+                    }*/
+                }]).done((result) => {
+                    this._setMountpoint(result[0]);
+                    resolve(this._mountpoint);
+                }).fail(reject);
+            });
         });
     }
 
     unmount() {
         return new Promise((resolve, reject) => {
-            this._filesystemProxy.call("Unmount", [{}]).done(resolve).fail(reject);
+            this._filesystemProxy.call("Unmount", [{}]).done(() => {
+                this._setMountpoint("");
+            }).fail(reject);
         });
     }
 
