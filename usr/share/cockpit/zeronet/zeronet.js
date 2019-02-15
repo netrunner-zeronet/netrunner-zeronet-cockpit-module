@@ -3,35 +3,45 @@ const ZERONET_UNITNAME = "zeronet.service";
 const SUPPORTED_FILESYSTEMS = ["ext3", "ext4", "xfs", "btrfs", "ntfs"];
 
 const DEFAULT_ZERONET_FOLDER = "/opt/zeronet/ZeroNet-master"
+const ZERONET_CURRENT_CONFIG_FILE = "/opt/zeronet/current.conf"
+const ZERONET_SERVICE_FILE = "/usr/lib/systemd/system/zeronet.service"
 
 class Zeronet
 {
 
-    static currentZeronetPath() {
+    static currentZeronetUuid() {
         return new Promise((resolve, reject) => {
-            if (this._currentZeronetPath) {
-                return resolve(this._currentZeronetPath);
-            }
-
-            // Check whether it's a symlink to somewhere else
-            StorageUtils.symlinkTarget(DEFAULT_ZERONET_FOLDER).then((path) => {
-                if (path) {
-                    this._currentZeronetPath = path;
-                } else { // No symlink, is currently the default
-                    this._currentZeronetPath = DEFAULT_ZERONET_FOLDER;
+            // TODO cache?
+            cockpit.file(ZERONET_CURRENT_CONFIG_FILE).read().done((data) => {
+                if (data) {
+                    resolve(data.trim());
+                } else {
+                    resolve("");
                 }
-                resolve(this._currentZeronetPath);
-            }, (err) => {
-                console.warn("Failed to determine current ZeroNet folder", err);
+            }).fail((err) => {
+                resolve("");
             });
         });
     }
 
-    static onCurrentZeronetPathChanged(cb) {
-        if (!Zeronet._currentZeronetPathChangedCbs) {
-            Zeronet._currentZeronetPathChangedCbs = [];
+    static setCurrentZeronetUuid(uuid) {
+        return new Promise((resolve, reject) => {
+            cockpit.file(ZERONET_CURRENT_CONFIG_FILE).replace(uuid).done(() => {
+                if (Zeronet._currentZeronetUuidChangedCbs) {
+                    Zeronet._currentZeronetUuidChangedCbs.forEach((cb) => {
+                        cb(uuid);
+                    });
+                }
+                resolve();
+            }, reject);
+        });
+    }
+
+    static onCurrentZeronetUuidChanged(cb) {
+        if (!Zeronet._currentZeronetUuidChangedCbs) {
+            Zeronet._currentZeronetUuidChangedCbs = [];
         }
-        Zeronet._currentZeronetPathChangedCbs.push(cb);
+        Zeronet._currentZeronetUuidChangedCbs.push(cb);
     }
 
     static get currentPartitionItem() {
@@ -41,7 +51,6 @@ class Zeronet
         var oldItem = Zeronet._currentPartitionItem;
         Zeronet._currentPartitionItem = newItem;
 
-        console.log("SET IT TO", newItem, "TELL", Zeronet._currentPartitionItemChangedCbs);
         (Zeronet._currentPartitionItemChangedCbs || []).forEach((cb) => {
             cb(newItem, oldItem);
         });
@@ -383,6 +392,15 @@ class ZeronetPartition extends ZeronetPartitionTemplate
         this.stopButtonVisible = false;
         this.copyButtonVisible = false;
 
+        let currentZeronetUuidChanged = (uuid) => {
+            if ((uuid && uuid === partition.uuid) || (!uuid && partition.mountpoint === "/")) {
+                Zeronet.currentPartitionItem = this
+            }
+        };
+
+        Zeronet.currentZeronetUuid().then(currentZeronetUuidChanged);
+        Zeronet.onCurrentZeronetUuidChanged(currentZeronetUuidChanged);
+
         let isSupportedFilesystem = SUPPORTED_FILESYSTEMS.includes(partition.filesystem);
         if (isSupportedFilesystem) {
 
@@ -391,67 +409,24 @@ class ZeronetPartition extends ZeronetPartitionTemplate
             // Helper promise that resolves immediately if mounted or mounts first
             new Promise((resolve, reject) => {
                 if (partition.mounted) {
-                    return resolve();
+                    return resolve(partition.mountpoint);
                 }
 
-                partition.mount().then(() => {
+                partition.mount().then((mp) => {
                     partition.mountedForChecking = true;
-                    resolve();
+                    resolve(mp);
                 }, reject);
-            }).then(() => {
+            }).then((mp) => {
 
-                StorageUtils.diskFree(partition.mountpoint).then((freeSpace) => {
+                // FIXME unmount only when both diskFree and checkZeronet have finished
+                // Promise.all() doesn't seem to do the job, though?
+                StorageUtils.diskFree(mp).then((freeSpace) => {
                     this.freeSpace = freeSpace;
                 }, (err) => {
-                    console.warn("Failed to get free space for", partition.device, "on", partition.mountpoint, err);
+                    console.warn("Failed to get free space for", this._partition.device, "on", this._partition.mountpoint, err);
                 });
 
-                // FIXME check multiple locations on a drive
-                // perhaps just list all with "ZeroNet-master" name
-                // and also take into account the /opt sdcard thing
-
-                var mp = partition.mountpoint;
-                if (mp == "/") {
-                    // Special case for built-in SD
-                    mp = "/opt/zeronet";
-                }
-
-                var path = mp + "/ZeroNet-master";
-
-                StorageUtils.dirExists(path).then((exists) => {
-                    console.log("has zeronet here", partition.mountpoint, path, exists);
-
-                    if (!exists) {
-                        this.zeronet = "No ZeroNet found";
-                        return;
-                    }
-
-                    // TODO only when there's more than one partition
-                    this.copyButtonVisible = true;
-                    this.startButtonVisible = true;
-
-                    StorageUtils.diskUsage(path).then((usage) => {
-                        this.zeronet = `<strong>${LocaleUtils.formatSize(usage)}</strong> folder at ${path}`;
-                    }, (err) => {
-                        console.warn("Failed to determine ZeroNet folder usage on", partition.mountpoint, "which is", partition.device, "in", path, err);
-                        this.zeronet = "ZeroNet found";
-                    });
-
-                    // Now check if this is our current instance
-                    Zeronet.currentZeronetPath().then((currentPath) => {
-
-                        if (path == currentPath) {
-                            Zeronet.currentPartitionItem = this;
-                        }
-
-                    }, (err) => {
-                        console.warn("Failed to determine current zeronet path");
-                    });
-
-                }, (err) => {
-                    console.warn("Failed to determine zeronet existance on", partition.mountpoint, "which is", partition.device, "in", path, err);
-                    this.zeronet = "Failed to check for ZeroNet (" + err.message + ")";
-                }).finally(() => {
+                this.checkZeronet().then(() => {}, () => {}).finally(() => {
                     // Unmount again after having checked
                     // Give it some time to settle before trying to
                     setTimeout(() => {
@@ -465,6 +440,7 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                         }
                     }, 1000);
                 });
+
             }, (err) => {
                 console.warn("Failed to mount", partition.device, err);
                 this.zeronet = "Failed to mount (" + err.message + ")";
@@ -492,7 +468,7 @@ class ZeronetPartition extends ZeronetPartitionTemplate
         this.headingBadgeType = "";
 
         switch (status) {
-        case "current":
+        case "current": // TODO unused, remove
             this.headingBadge = "Current";
             this.headingBadgeType = "default";
             break;
@@ -519,11 +495,59 @@ class ZeronetPartition extends ZeronetPartitionTemplate
             this.headingBadge = "";//"Not running";
             //this.startButtonVisible = true;
             break;
+        case "":
+            this.headingBadge = "";
+            this.headingBadgeType = "";
+            break;
         default:
             throw new TypeError("Invalid ZeroNet state", status);
         }
 
         this._status = status;
+    }
+
+    checkZeronet() {
+        return new Promise((resolve, reject) => {
+
+            if (!this._partition.mounted) {
+                return reject("Cannot check ZeroNet status without being mounted");
+            }
+
+            let mp = this._partition.mountpoint;
+            // Special case for our built-in one
+            if (mp == "/") {
+                mp = "/opt/zeronet";
+            }
+
+            let path = mp + "/ZeroNet-master";
+
+            StorageUtils.dirExists(path).then((exists) => {
+
+                if (!exists) {
+                    this.zeronet = "No ZeroNet found";
+                    reject();
+                    return;
+                }
+
+                // TODO only when there's more than one partition
+                this.copyButtonVisible = true;
+                this.startButtonVisible = true;
+
+                StorageUtils.diskUsage(path).then((usage) => {
+                    this.zeronet = `<strong>${LocaleUtils.formatSize(usage)}</strong> folder at ${path}`;
+                    resolve();
+                }, (err) => {
+                    console.warn("Failed to determine ZeroNet folder usage on", this._partition.mountpoint, "which is", this._partition.device, "in", path, err);
+                    this.zeronet = "ZeroNet found";
+                    resolve();
+                });
+
+            }, (err) => {
+                console.warn("Failed to determine zeronet existance on", this._partition.mountpoint, "which is", this._partition.device, "in", path, err);
+                this.zeronet = "Failed to check for ZeroNet (" + err.message + ")";
+                reject();
+            });
+        })
     }
 
 }
@@ -584,19 +608,56 @@ udisks.drives.then((drives) => {
                 zeronet.getUnit().then((unit) => {
 
                     uiPartiton.onStartButtonClicked(() => {
+
+                        // We're already current? Great, start unit!
                         if (Zeronet.currentPartitionItem === uiPartiton) {
                             unit.start();
                             return;
                         }
 
-                        alert("Starting ZeroNet other than the built-in one in /opt is not yet implemented");
+                        // Otherwise mount the drive, change the current UUID first
+                        new Promise((resolve, reject) => {
+                            if (partition.mounted) {
+                                return resolve(partition.mountpoint);
+                            }
+
+                            partition.mount().then(resolve, reject);
+                        }).then((mp) => {
+
+                            // Since we're mounted now, how about updating the ZeroNet path and size in the UI
+                            uiPartiton.checkZeronet().then(() => {}, () => {});
+
+                            var targetUuid = partition.uuid;
+                            // Special case for our built-in one
+                            if (partition.mountpoint === "/") {
+                                targetUuid = "";
+                            }
+
+                            Zeronet.setCurrentZeronetUuid(targetUuid).then(() => {
+
+                                // FIXME a warning that this doesn't properly work yet
+                                if (targetUuid) {
+                                    alert("Starting instances from locations other than /opt/zeronet is not yet supported.\n\nIt may look like it worked but right now it's just starting the one in /opt/zeronet no matter what the UI shows as Running");
+                                }
+
+                                unit.start();
+
+                            }, (err) => {
+                                console.warn("Failed to change zeronet uuid", err);
+                            });
+                        });
+
                     });
 
                     uiPartiton.onStopButtonClicked(() => {
+                        uiPartiton.busy = true;
                         unit.stop().then(() => {
                             console.log("Stopped unit");
                         }, (err) => {
-                            console.log("error stopping", err);
+                            console.warn("Error stopping unit", err);
+                            alert(err.message);
+                        }).finally(() => {
+                            uiPartiton.busy = false;
                         });
                     });
 
@@ -653,7 +714,6 @@ Zeronet.onCurrentPartitionItemChanged((partitionItem, oldItem) => {
         oldItem.status = "";
     }
 
-    partitionItem.status = "current";
     partitionItem.busy = true;
 
     zeronet.getUnit().then((unit) => {
