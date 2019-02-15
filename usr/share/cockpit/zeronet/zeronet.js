@@ -588,6 +588,9 @@ udisks.onDriveAdded((drive) => {
     });
 });
 
+var mainBusy = document.getElementById("mainbusy");
+mainBusy.classList.remove("hidden");
+
 udisks.drives.then((drives) => {
 
     drives.forEach((drive) => {
@@ -598,6 +601,8 @@ udisks.drives.then((drives) => {
         }
 
         drive.partitions.then((partitions) => {
+
+            mainBusy.classList.add("hidden");
 
             partitions.forEach((partition) => {
 
