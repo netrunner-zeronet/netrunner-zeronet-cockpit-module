@@ -93,6 +93,19 @@ class Zeronet
         });
     }
 
+    static showMessage(type, text) {
+       var element = document.createElement("div");
+       element.className = `alert alert-${type} alert-dismissable`;// fade show`;
+       element.role = "alert";
+
+       element.innerHTML = `${text}
+  <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+    <span aria-hidden="true">&times;</span>
+  </button>`;
+
+        document.getElementById("messages").appendChild(element);
+    }
+
 }
 
 class ZeronetPartitionTemplate
@@ -603,6 +616,15 @@ udisks.drives.then((drives) => {
         drive.partitions.then((partitions) => {
 
             mainBusy.classList.add("hidden");
+
+            // Check if the current Zeronet partition is known, otherwise display a warning
+            Zeronet.currentZeronetUuid().then((uuid) => {
+                if (uuid && !partitions.some((partition) => {
+                        return partition.uuid === uuid;
+                    })) {
+                    Zeronet.showMessage("warning", "The partition last used for ZeroNet is currently not present in the system.");
+                }
+            });
 
             partitions.forEach((partition) => {
 
