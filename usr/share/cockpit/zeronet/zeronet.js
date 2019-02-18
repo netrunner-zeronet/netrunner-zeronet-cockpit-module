@@ -114,9 +114,9 @@ class ZeronetPartitionTemplate
     constructor() {
         var html = `
 <div class="list-view-pf-actions">
-    <button class="btn btn-primary" data-id="startButton">Start</button>
-    <button class="btn btn-primary" data-id="stopButton">Stop</button>
-    <button class="btn btn-default" data-id="copyButton">Copy to…</button>
+    <button class="btn btn-primary hidden" data-id="startButton">Start</button>
+    <button class="btn btn-primary hidden" data-id="stopButton">Stop</button>
+    <button class="btn btn-default hidden" data-id="copyButton">Copy to…</button>
 </div>
 
 <div class="list-view-pf-main-info">
