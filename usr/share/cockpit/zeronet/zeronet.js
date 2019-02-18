@@ -638,7 +638,13 @@ udisks.drives.then((drives) => {
 
                         // We're already current? Great, start unit!
                         if (Zeronet.currentPartitionItem === uiPartiton) {
-                            unit.start();
+                            unit.start().then(() => {
+                                // start success
+                            }, (err) => {
+                                Zeronet.showMessage("danger", "Failed to launch ZeroNet: " + err.message);
+                            }).finally(() => {
+                                uiPartiton.busy = false;
+                            });
                             return;
                         }
 
@@ -667,7 +673,13 @@ udisks.drives.then((drives) => {
                                     alert("Starting instances from locations other than /opt/zeronet is not yet supported.\n\nIt may look like it worked but right now it's just starting the one in /opt/zeronet no matter what the UI shows as Running");
                                 }
 
-                                unit.start();
+                                unit.start().then(() => {
+                                    // start success
+                                }, (err) => {
+                                    Zeronet.showMessage("danger", "Failed to launch ZeroNet: " + err.message);
+                                }).finally(() => {
+                                    uiPartiton.busy = false;
+                                });
 
                             }, (err) => {
                                 console.warn("Failed to change zeronet uuid", err);
