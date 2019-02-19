@@ -1,6 +1,6 @@
 
 const ZERONET_UNITNAME = "zeronet.service";
-const SUPPORTED_FILESYSTEMS = ["ext3", "ext4", "xfs", "btrfs", "ntfs"];
+const SUPPORTED_FILESYSTEMS = ["ext3", "ext4", "xfs", "btrfs", "ntfs", "vfat"];
 
 const DEFAULT_ZERONET_FOLDER = "/opt/zeronet/ZeroNet-master"
 const ZERONET_CURRENT_CONFIG_FILE = "/opt/zeronet/current.conf"
