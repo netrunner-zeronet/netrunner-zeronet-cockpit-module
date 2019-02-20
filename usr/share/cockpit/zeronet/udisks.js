@@ -199,14 +199,7 @@ class UDisksDrive
             partition._label = block.HintName.v || block.IdLabel.v,
             partition._filesystem = block.IdType.v,
             partition._size = block.Size.v,
-            partition._mountpoint = fs.MountPoints.v.map((base64) => {
-                var str = atob(base64);
-                // FIXME JS cannot deal with zero-terminated string here, manually removing \0...
-                if (str.charCodeAt(str.length - 1) === 0) {
-                    str = str.slice(0, -1);
-                }
-                return str;
-            })[0] || "";
+            partition._setMountpoint(UDisksPartition._convertMountpoints(fs.MountPoints.v)[0]);
 
             if (!this._partitions) {
                 this._partitions = [];
@@ -224,6 +217,11 @@ class UDisksPartition
 
         this._filesystemProxy = UDisks.dbusClient().proxy(UDisks.UDISKS2_FILESYSTEM_INTERFACE, nativePath);
         this._filesystemProxy.addEventListener("changed", (data) => {
+            // Listen for when device was mounted elsewhere
+            var mps = data.detail.MountPoints;
+            if (mps) {
+                this._setMountpoint(UDisksPartition._convertMountpoints(mps)[0]);
+            }
             //console.log("Change in", nativePath, "is", data);
         });
     }
@@ -247,9 +245,25 @@ class UDisksPartition
         this._mountpointChangedCbs.push(cb);
     }
 
+    static _convertMountpoints(base64mps) {
+        return (base64mps || []).map((base64) => {
+            var str = atob(base64);
+            // FIXME JS cannot deal with zero-terminated string here, manually removing \0...
+            if (str.charCodeAt(str.length - 1) === 0) {
+                str = str.slice(0, -1);
+            }
+            return str;
+        });
+    }
+
     _setMountpoint(mountpoint) {
+        if (!mountpoint) {
+            mountpoint = "";
+        }
+        var oldMountpount = this._mountpoint;
         this._mountpoint = mountpoint;
-        if (this._mountpointChangedCbs) {
+        // TODO also have a "is mounted changed" signal
+        if (oldMountpount != mountpoint && this._mountpointChangedCbs) {
             this._mountpointChangedCbs.forEach((cb) => {
                 cb(mountpoint);
             });

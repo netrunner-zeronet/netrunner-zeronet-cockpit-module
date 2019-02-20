@@ -224,6 +224,14 @@ class ZeronetPartitionTemplate
         this._iconElement.src = "style/" + icon + ".svg";
     }
 
+    get mounted() {
+        return this._iconElement.classList.contains("list-view-pf-icon-success");
+    }
+    set mounted(mounted) {
+        this._iconElement.classList[mounted ? "add" : "remove"]("pficon");
+        this._iconElement.classList[mounted ? "add" : "remove"]("list-view-pf-icon-success");
+    }
+
     get heading() {
         return this._headingElement.innerText;
     }
@@ -413,6 +421,12 @@ class ZeronetPartition extends ZeronetPartitionTemplate
 
         Zeronet.currentZeronetUuid().then(currentZeronetUuidChanged);
         Zeronet.onCurrentZeronetUuidChanged(currentZeronetUuidChanged);
+
+        let updateIsMounted = () => {
+            this.mounted = partition.mounted;
+        }
+        partition.onMountpointChanged(updateIsMounted);
+        updateIsMounted();
 
         let isSupportedFilesystem = SUPPORTED_FILESYSTEMS.includes(partition.filesystem);
         if (isSupportedFilesystem) {
