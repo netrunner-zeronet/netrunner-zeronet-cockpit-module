@@ -23,10 +23,6 @@ class Systemd
     static dbusManager() {
         if (!Systemd._systemdManager) {
             Systemd._systemdManager = Systemd.dbusClient().proxy(Systemd.SYSTEMD1_MANAGER_INTERFACE, Systemd.SYSTEMD1_PATH);
-
-            Systemd._systemdManager.addEventListener("signal", (data) => {
-                //console.log("SDMANAGER SIGNAL", data);
-            });
         }
         return Systemd._systemdManager;
     }
@@ -95,9 +91,6 @@ class SystemdUnit
             },
             "CanStop": {
 
-            },
-            "CanReload": {
-
             }
         };
 
@@ -128,18 +121,17 @@ class SystemdUnit
 
     get canStart() { return this._canStart; }
     get canStop() { return this._canStop; }
-    get canReload() { return this._canReload; }
 
     start() {
-        return this._dbusManagerCallAndInvalidate("StartUnit", [this._id, "replace"]);
+        return new Promise((resolve, reject) => {
+            Systemd._systemdManager.call("StartUnit", [this._id, "replace"]).done(resolve).fail(reject);
+        });
     }
 
     stop() {
-        return this._dbusManagerCallAndInvalidate("StopUnit", [this._id, "replace"]);
-    }
-
-    reload() {
-
+        return new Promise((resolve, reject) => {
+            Systemd._systemdManager.call("StopUnit", [this._id, "replace"]).done(resolve).fail(reject);
+        });
     }
 
     _updateProp(dbusName, newValue, changeCbs) {
@@ -167,39 +159,6 @@ class SystemdUnit
         return true;
     }
 
-    _dbusManagerCallAndInvalidate(...args) {
-        return new Promise((resolve, reject) => {
-            Systemd._systemdManager.call.apply(this, args).done((result) => {
-
-                var jobProxy = Systemd.dbusClient().proxy(Systemd.SYSTEMD1_JOB_INTERFACE, result[0]);
-                jobProxy.wait(() => { console.log("PRXWT", jobProxy.valid); });
-                console.log("PRX", jobProxy, jobProxy.valid);
-                jobProxy.addEventListener("signal", (sig) =>  {
-                    console.log("SGI", sig);
-                });
-                jobProxy.addEventListener("changed", (sig) =>  {
-                    console.log("CHG", sig.detail);
-                });
-
-                jobProxy.onchanged = (sig) => { console.log("CHG NO LIST", sig); };
-
-                var jobPropertiesProxy = Systemd.dbusClient().proxy(DBUS_PROPERTIES_INTERFACE, result[0]);
-                console.log("BLA", jobPropertiesProxy);
-                jobPropertiesProxy.addEventListener("signal", (sig) =>  {
-                    console.log("PPSGI", sig);
-                });
-                jobPropertiesProxy.addEventListener("changed", (sig) =>  {
-                    console.log("PPCHG", sig);
-                });
-                jobPropertiesProxy.wait(() => {
-                    console.log("PPWAIT", jobPropertiesProxy.valid);
-                });
-
-
-            }).fail(reject);
-        });
-    }
-
     onSubStateChanged(cb) {
         if (!this._subStateChangedCbs) {
             this._subStateChangedCbs = [];
@@ -207,20 +166,11 @@ class SystemdUnit
         this._subStateChangedCbs.push(cb);
     }
 
+    // TODO just call this in the constructor?
     invalidate() {
         return new Promise((resolve, reject) => {
 
-            var oldSubState = this._subState;
-
             var promises = [];
-
-
-                this._dbusPropertiesProxy.call("Get", ["org.freedesktop.systemd1.Service", "StatusText"]).done((result) => {
-
-
-                }).fail((err) => { console.warn("FÄIL", err); });
-
-
 
             Object.keys(SystemdUnit._interestedProps).forEach((dbusProp) => {
 

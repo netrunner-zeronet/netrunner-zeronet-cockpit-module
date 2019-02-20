@@ -148,7 +148,6 @@ class UDisksDrive
         this._removable = driveData.Removable.v;
         this._media = driveData.Media.v;
         this._mediaCompatibility = driveData.MediaCompatibility.v;
-        console.log("Made drive", driveData);
     }
 
     get nativePath() { return this._nativePath; }
@@ -274,13 +273,7 @@ class UDisksPartition
         return new Promise((resolve, reject) => {
             cockpit.user().done((user) => {
 
-                this._filesystemProxy.call("Mount", [{
-                    // Setting uid via udisks is not allowed :(
-                    /*options: {
-                        t: "s",
-                        v: "uid=" + user.id
-                    }*/
-                }]).done((result) => {
+                this._filesystemProxy.call("Mount", [{}]).done((result) => {
                     this._setMountpoint(result[0]);
                     resolve(this._mountpoint);
                 }).fail(reject);
@@ -294,10 +287,6 @@ class UDisksPartition
                 this._setMountpoint("");
             }).fail(reject);
         });
-    }
-
-    invalidate() {
-
     }
 
     _updateProps(data) {
