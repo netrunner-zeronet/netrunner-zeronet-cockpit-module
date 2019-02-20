@@ -624,6 +624,39 @@ udisks.onDriveAdded((drive) => {
 var mainBusy = document.getElementById("mainbusy");
 mainBusy.classList.remove("hidden");
 
+// Check for whether the external drive zeronet is on is present
+Zeronet.currentZeronetUuid().then((uuid) => {
+    if (!uuid) { // using internal one, all good
+        return;
+    }
+
+    var partitionPromises = [];
+
+    udisks.drives.then((drives) => {
+        drives.forEach((drive) => {
+            partitionPromises.push(drive.partitions);
+        });
+    }).then(() => {
+        Promise.all(partitionPromises).then((partitions) => {
+
+            // Array.flat(): Turns a [drive: [partition, partition], drive: [partition, partition]] into a flat [partition, partition, ...]
+            // pretty new, only in FF 62 and Chrome 67
+
+            if (!partitions.flat().some((partition) => {
+                return partition.uuid === uuid;
+            })) {
+                Zeronet.showMessage("warning", "The partition last used for ZeroNet is currently not present in the system.");
+                // Reset back to internal one
+                Zeronet.setCurrentZeronetUuid("");
+            }
+
+        }, (err) => {
+            console.warn("Failed to check for partition existance", err);
+        });
+    });
+
+});
+
 udisks.drives.then((drives) => {
 
     drives.forEach((drive) => {
