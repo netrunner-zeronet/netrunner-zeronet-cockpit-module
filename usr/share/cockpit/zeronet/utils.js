@@ -120,6 +120,27 @@ class StorageUtils
         });
     }
 
+    static mtime(path) {
+        return new Promise((resolve, reject) => {
+
+            var args = ["stat", "-c", "%Y", path];
+
+            cockpit.spawn(args, {superuser: true}).done((result) => {
+                var resultNumber = Number(result);
+                if (isNaN(resultNumber)) {
+                    return reject("Failed to parse output");
+                }
+
+                var tzOffset = new Date().getTimezoneOffset() /*in minutes!*/ * 60;
+                var d = new Date((resultNumber + tzOffset) * 1000);
+
+                resolve(d);
+            }).fail((err) => {
+                reject(err);
+            });
+        });
+    }
+
 }
 
 class LocaleUtils

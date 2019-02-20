@@ -148,6 +148,10 @@ class ZeronetPartitionTemplate
                 <span class="pficon pficon-network"></span>
                 <span data-id="zeronet-info"></span>
             </div>
+            <div class="list-view-pf-additional-info-item" data-id="last-used-info-container">
+                <span class="fa fa-clock-o"></span>
+                <span data-id="last-used-info"></span>
+            </div>
         </div>
     </div>
 </div>`;
@@ -175,8 +179,11 @@ class ZeronetPartitionTemplate
         this._freeSpaceInfo = this._findDomItem("free-space-info");
         this._filesystemInfo = this._findDomItem("filesystem-info");
         this._zeronetInfo = this._findDomItem("zeronet-info");
+        this._lastUsedInfoContainer = this._findDomItem("last-used-info-container");
+        this._lastUsedInfo = this._findDomItem("last-used-info");
 
         this._updateSpaceInfo();
+        this._updateLastUsedInfo();
         this.busy = false;
     }
 
@@ -209,6 +216,19 @@ class ZeronetPartitionTemplate
         } else {
             this._freeSpaceInfo.innerText = "Unknown";
         }
+    }
+
+    _updateLastUsedInfo() {
+        var text = "";
+        // FIXME this._status is only ZeronetPartition
+        // so we kinda break the separation between "dumb UI" (template) and "logic UI" (uiPartiton) here
+        if (this._lastUsedDate && this._status !== "running") {
+            // TODO proper locale, but the page is English right now so be consistent with that
+            // GB ensures a sane order of date-month-year over US
+            text = `Last used <strong>${this._lastUsedDate.toLocaleString("en-GB")}</strong>`;
+        }
+        this._lastUsedInfo.innerHTML = text;
+        this._lastUsedInfoContainer.classList[text ? "remove" : "add"]("hidden");
     }
 
     get icon() {
@@ -300,6 +320,14 @@ class ZeronetPartitionTemplate
     }
     set zeronet(zn) {
         this._zeronetInfo.innerHTML = zn;
+    }
+
+    get lastUsed() {
+        return this._lastUsedDate;
+    }
+    set lastUsed(date) {
+        this._lastUsedDate = date;
+        this._updateLastUsedInfo();
     }
 
     get startButtonVisible() {
@@ -537,6 +565,7 @@ class ZeronetPartition extends ZeronetPartitionTemplate
         }
 
         this._status = status;
+        this._updateLastUsedInfo();
     }
 
     checkZeronet() {
@@ -566,8 +595,18 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 this.copyButtonVisible = true;
                 this.startButtonVisible = true;
 
+                // TODO Can I chain these promises rather than nesting them?
                 StorageUtils.diskUsage(path).then((usage) => {
                     this.zeronet = `<strong>${LocaleUtils.formatSize(usage)}</strong> folder at ${path}`;
+
+                    StorageUtils.mtime(path + "/log/debug.log").then((result) => {
+                        // TODO proper locale but UI is English for now, so be consistent with that here
+                        this.lastUsed = result;
+                    }, (err) => {
+                        console.warn("Failed to determine last usage on", this._partition.mountpoint, "which is", this._partition.device, "in", path, err);
+                        this.lastUsed = undefined;
+                    });
+
                     resolve();
                 }, (err) => {
                     console.warn("Failed to determine ZeroNet folder usage on", this._partition.mountpoint, "which is", this._partition.device, "in", path, err);
