@@ -83,11 +83,6 @@ class Zeronet
 
             this._systemd.getUnit(ZERONET_UNITNAME).then((unit) => {
                 this._zeronetUnit = unit;
-
-                /*unit.onSubStateChanged(() => {
-                    this._updateStateUi(unit);
-                });*/
-
                 resolve(unit);
             }, reject);
         });
@@ -424,6 +419,12 @@ class ZeronetPartition extends ZeronetPartitionTemplate
 
         let updateIsMounted = () => {
             this.mounted = partition.mounted;
+
+            if (partition.mounted) {
+                // Since we're mounted now, how about updating the ZeroNet path and size in the UI
+                // TODO this may race with the explicit mount+check+unmount we do on start
+                this.checkZeronet().then(() => {}, () => {});
+            }
         }
         partition.onMountpointChanged(updateIsMounted);
         updateIsMounted();
@@ -480,10 +481,6 @@ class ZeronetPartition extends ZeronetPartitionTemplate
         }
     }
 
-    get hasZeronet() {
-
-    }
-
     get status() {
         return this._status;
     }
@@ -500,8 +497,14 @@ class ZeronetPartition extends ZeronetPartitionTemplate
             this.headingBadgeType = "default";
             break;
         case "start":
+        case "start-pre":
             this.headingBadge = "Starting";
             this.headingBadgeType = "info";
+            this.busy = true;
+            break;
+        case "auto-restart":
+            this.headingBadge = "Restarting";
+            this.headingBadgeType = "warning";
             this.busy = true;
             break;
         case "stop-sigterm":
@@ -527,7 +530,10 @@ class ZeronetPartition extends ZeronetPartitionTemplate
             this.headingBadgeType = "";
             break;
         default:
-            throw new TypeError("Invalid ZeroNet state", status);
+            console.warn("Invalid ZeroNet state", status);
+            this.headingBadge = status;
+            this.headingBadgeType = "default";
+            break;
         }
 
         this._status = status;
@@ -601,7 +607,7 @@ var devicesDiv = document.getElementById("devices");
 
 var udisks = new UDisks();
 
-udisks.onDriveRemoved((drivePath) => {
+/*udisks.onDriveRemoved((drivePath) => {
     console.log("DRIVE REMOVED", drivePath);
 });
 
@@ -613,7 +619,7 @@ udisks.onDriveAdded((drive) => {
     }, (err) => {
         console.warn("failed to get parts for new drive", err);
     });
-});
+});*/
 
 var mainBusy = document.getElementById("mainbusy");
 mainBusy.classList.remove("hidden");
@@ -636,7 +642,8 @@ udisks.drives.then((drives) => {
                 if (uuid && !partitions.some((partition) => {
                         return partition.uuid === uuid;
                     })) {
-                    Zeronet.showMessage("warning", "The partition last used for ZeroNet is currently not present in the system.");
+                    // FIXME This is called for every drive so we would always show this if there's more than one
+                    //Zeronet.showMessage("warning", "The partition last used for ZeroNet is currently not present in the system.");
                 }
             });
 
@@ -650,8 +657,17 @@ udisks.drives.then((drives) => {
 
                     uiPartiton.onStartButtonClicked(() => {
 
-                        // We're already current? Great, start unit!
-                        if (Zeronet.currentPartitionItem === uiPartiton) {
+                        uiPartiton.busy = true;
+
+                        var targetUuid = partition.uuid;
+                        // Special case for our built-in one
+                        if (partition.mountpoint === "/") {
+                            targetUuid = "";
+                        }
+
+                        // Update current zeronet uuid that will be run by the unit
+                        Zeronet.setCurrentZeronetUuid(targetUuid).then(() => {
+
                             unit.start().then(() => {
                                 // start success
                             }, (err) => {
@@ -659,45 +675,11 @@ udisks.drives.then((drives) => {
                             }).finally(() => {
                                 uiPartiton.busy = false;
                             });
-                            return;
-                        }
 
-                        // Otherwise mount the drive, change the current UUID first
-                        new Promise((resolve, reject) => {
-                            if (partition.mounted) {
-                                return resolve(partition.mountpoint);
-                            }
-
-                            partition.mount().then(resolve, reject);
-                        }).then((mp) => {
-
-                            // Since we're mounted now, how about updating the ZeroNet path and size in the UI
-                            uiPartiton.checkZeronet().then(() => {}, () => {});
-
-                            var targetUuid = partition.uuid;
-                            // Special case for our built-in one
-                            if (partition.mountpoint === "/") {
-                                targetUuid = "";
-                            }
-
-                            Zeronet.setCurrentZeronetUuid(targetUuid).then(() => {
-
-                                // FIXME a warning that this doesn't properly work yet
-                                if (targetUuid) {
-                                    alert("Starting instances from locations other than /opt/zeronet is not yet supported.\n\nIt may look like it worked but right now it's just starting the one in /opt/zeronet no matter what the UI shows as Running");
-                                }
-
-                                unit.start().then(() => {
-                                    // start success
-                                }, (err) => {
-                                    Zeronet.showMessage("danger", "Failed to launch ZeroNet: " + err.message);
-                                }).finally(() => {
-                                    uiPartiton.busy = false;
-                                });
-
-                            }, (err) => {
-                                console.warn("Failed to change zeronet uuid", err);
-                            });
+                        }, (err) => {
+                            console.warn("Failed to change zeronet uuid", err);
+                            Zeronet.showMessage("danger", "Failed to update configuration for what is the current ZeroNet: " + err.message);
+                            uiPartiton.busy = false;
                         });
 
                     });
@@ -708,7 +690,7 @@ udisks.drives.then((drives) => {
                             console.log("Stopped unit");
                         }, (err) => {
                             console.warn("Error stopping unit", err);
-                            alert(err.message);
+                            Zeronet.showMessage("danger", "Failed to stop ZeroNet: " + err.message);
                         }).finally(() => {
                             uiPartiton.busy = false;
                         });
@@ -719,7 +701,6 @@ udisks.drives.then((drives) => {
                     });
 
                     var unitSubStateChanged = (newState) => {
-                        console.log("SUBST CH", newState);
 
                         var isCurrent = (Zeronet.currentPartitionItem === uiPartiton);
                         var isStopped = (newState === "failed" || newState === "dead");

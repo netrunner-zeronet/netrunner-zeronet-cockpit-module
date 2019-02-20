@@ -39,7 +39,6 @@ class UDisks
                 var driveData = interfaces[UDisks.UDISKS2_DRIVE_INTERFACE];
                 if (driveData !== undefined) {
                     if (this._knownDriveDbusPaths && this._knownDriveDbusPaths.includes(path)) {
-                        console.log("Already know this drive", path);
                         return;
                     }
 
@@ -221,7 +220,6 @@ class UDisksPartition
             if (mps) {
                 this._setMountpoint(UDisksPartition._convertMountpoints(mps)[0]);
             }
-            //console.log("Change in", nativePath, "is", data);
         });
     }
 
