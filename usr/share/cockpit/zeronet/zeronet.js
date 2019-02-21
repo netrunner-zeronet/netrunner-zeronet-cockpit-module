@@ -599,7 +599,7 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 StorageUtils.diskUsage(path).then((usage) => {
                     this.zeronet = `<strong>${LocaleUtils.formatSize(usage)}</strong> folder at ${path}`;
 
-                    StorageUtils.mtime(path + "/log/debug.log").then((result) => {
+                    StorageUtils.mtime(path + "/data").then((result) => {
                         // TODO proper locale but UI is English for now, so be consistent with that here
                         this.lastUsed = result;
                     }, (err) => {
