@@ -33,7 +33,7 @@ class Zeronet
                     });
                 }
                 resolve();
-            }, reject);
+            }).fail(reject);
         });
     }
 
