@@ -19,8 +19,7 @@ com.netrunner.zeronet.cockpit.copier
 
 Signals (namespace com.netrunner.zeronet)
 
-FilesCounted - emitted before copy starts when the number of files to be copied is known
-Progress - peridocially reported with a percentage (0-99) of how many files were copied
+Progress - peridocially reported with the number of copied files and total amount
 Finished - copying finished successfully
 Failed - copying failed (argument "s" contains exception message)
 """
@@ -39,13 +38,13 @@ class DBusService(dbus.service.Object):
     def __init__(self, path):
         dbus.service.Object.__init__(self, dbus.SessionBus(), path)
 
-    @dbus.service.signal(dbus_interface="com.netrunner.zeronet")
-    def FilesCounted(self, count):
-        pass
+    # TODO add getters for source, destination, perhaps even UUID
+    # so we can query that if we didn't trigger the script ourself
+    #@dbus.service.method(dbus_interface="com.netrunner.zeronet",
+                         #in_signature="", out_signature="s"
 
-    @dbus.service.signal(dbus_interface="com.netrunner.zeronet",
-                         signature="u")
-    def Progress(self, percent):
+    @dbus.service.signal(dbus_interface="com.netrunner.zeronet")
+    def Progress(self, copied, total):
         pass
 
     @dbus.service.signal(dbus_interface="com.netrunner.zeronet")
@@ -80,8 +79,6 @@ if __name__ == "__main__":
         sys.exit(2)
 
     DBusGMainLoop(set_as_default=True)
-    #GLib.MainLoop().run()
-
 
     try:
         bus_name = dbus.service.BusName("com.netrunner.zeronet.cockpit.copier",
@@ -92,7 +89,6 @@ if __name__ == "__main__":
         sys.exit(3)
 
     dbusService = DBusService("/")
-    dbusService.FilesCounted(filesCount)
 
     print("Copying", filesCount, "from", src, "to", dest)
 
@@ -120,7 +116,8 @@ if __name__ == "__main__":
                 copiedCount += 1
 
                 if math.fmod(copiedCount, reportAfter) == 0:
-                    dbusService.Progress(round((copiedCount / filesCount) * 100))
+                    dbusService.Progress(copiedCount, filesCount)
+                    sleep(0.05) # FIXME Look like work is being done
 
     except Exception as e:
         print("Exception file copying", str(e))
