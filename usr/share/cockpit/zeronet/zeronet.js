@@ -109,9 +109,10 @@ class ZeronetPartitionTemplate
     constructor() {
         var html = `
 <div class="list-view-pf-actions">
-    <button class="btn btn-primary hidden" data-id="startButton">Start</button>
-    <button class="btn btn-primary hidden" data-id="stopButton">Stop</button>
-    <button class="btn btn-default hidden" data-id="copyButton">Copy to…</button>
+    <button class="btn btn-primary hiddnn target-selection-hidden" data-id="startButton">Start</button>
+    <button class="btn btn-primary hidden target-selection-hidden" data-id="stopButton">Stop</button>
+    <button class="btn btn-default hidden target-selection-hidden" data-id="copyToButton">Copy to…</button>
+    <button class="btn btn-primary target-selection-shown" data-id="copyHereButton">Copy here</button>
 </div>
 
 <div class="list-view-pf-main-info">
@@ -144,7 +145,7 @@ class ZeronetPartitionTemplate
                 <span class="pficon pficon-cluster"></span>
                 <span data-id="filesystem-info"></span>
             </div>
-            <div class="list-view-pf-additional-info-item">
+            <div class="list-view-pf-additional-info-item" data-id="zeronet-info-container">
                 <span class="pficon pficon-network"></span>
                 <span data-id="zeronet-info"></span>
             </div>
@@ -161,7 +162,8 @@ class ZeronetPartitionTemplate
 
         this._startButton = this._findDomItem("startButton");
         this._stopButton = this._findDomItem("stopButton");
-        this._copyButton = this._findDomItem("copyButton");
+        this._copyToButton = this._findDomItem("copyToButton");
+        this._copyHereButton = this._findDomItem("copyHereButton");
 
         this._iconElement = this._findDomItem("icon");
 
@@ -178,12 +180,14 @@ class ZeronetPartitionTemplate
         this._freeSpaceInfoContainer = this._findDomItem("free-space-info-container");
         this._freeSpaceInfo = this._findDomItem("free-space-info");
         this._filesystemInfo = this._findDomItem("filesystem-info");
+        this._zeronetInfoContainer = this._findDomItem("zeronet-info-container");
         this._zeronetInfo = this._findDomItem("zeronet-info");
         this._lastUsedInfoContainer = this._findDomItem("last-used-info-container");
         this._lastUsedInfo = this._findDomItem("last-used-info");
 
         this._updateSpaceInfo();
         this._updateLastUsedInfo();
+        this.zeronet = "";
         this.busy = false;
     }
 
@@ -319,6 +323,7 @@ class ZeronetPartitionTemplate
         return this._zeronetInfo.innerHTML;
     }
     set zeronet(zn) {
+        this._zeronetInfoContainer.classList[zn ? "remove" : "add"]("hidden");
         this._zeronetInfo.innerHTML = zn;
     }
 
@@ -376,27 +381,44 @@ class ZeronetPartitionTemplate
         this._stopButtonClickedCbs.push(cb);
     }
 
-    get copyButtonVisible() {
-        !this._copyButton.classList.contains("hidden");
+    get copyToButtonVisible() {
+        !this._copyToButton.classList.contains("hidden");
     }
-    set copyButtonVisible(visible) {
-        this._copyButton.classList[visible ? "remove": "add"]("hidden");
+    set copyToButtonVisible(visible) {
+        this._copyToButton.classList[visible ? "remove": "add"]("hidden");
     }
-    get copyButtonEnabled() {
-        !this._copyButton.disabled;
+    get copyToButtonEnabled() {
+        !this._copyToButton.disabled;
     }
-    set copyButtonEnabled(enable) {
-        this._copyButton.disabled = enable ? "" : "disabled";
+    set copyToButtonEnabled(enable) {
+        this._copyToButton.disabled = enable ? "" : "disabled";
     }
-    onCopyButtonClicked(cb) {
-        if (!this._copyButtonClickedCbs) {
-            this._copyButtonClickedCbs = [];
+    onCopyToButtonClicked(cb) {
+        if (!this._copyToButtonClickedCbs) {
+            this._copyToButtonClickedCbs = [];
 
-            this._copyButton.addEventListener("click", () => {
-                this._copyButtonClickedCbs.forEach(cb);
+            this._copyToButton.addEventListener("click", () => {
+                this._copyToButtonClickedCbs.forEach(cb);
             });
         }
-        this._copyButtonClickedCbs.push(cb);
+        this._copyToButtonClickedCbs.push(cb);
+    }
+
+    get copyHereButtonVisible() {
+        !this._copyHereButton.classList.contains("hidden");
+    }
+    set copyHereButtonVisible(visible) {
+        this._copyHereButton.classList[visible ? "remove": "add"]("hidden");
+    }
+    onCopyHereButtonClicked(cb) {
+        if (!this._copyHereButtonClickedCbs) {
+            this._copyHereButtonClickedCbs = [];
+
+            this._copyHereButton.addEventListener("click", () => {
+                this._copyHereButtonClickedCbs.forEach(cb);
+            });
+        }
+        this._copyHereButtonClickedCbs.push(cb);
     }
 }
 
@@ -434,7 +456,7 @@ class ZeronetPartition extends ZeronetPartitionTemplate
 
         this.startButtonVisible = false;
         this.stopButtonVisible = false;
-        this.copyButtonVisible = false;
+        this.copyToButtonVisible = false;
 
         let currentZeronetUuidChanged = (uuid) => {
             if ((uuid && uuid === partition.uuid) || (!uuid && partition.mountpoint === "/")) {
@@ -474,6 +496,8 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 }, reject);
             }).then((mp) => {
 
+                this.busy = true;
+
                 // FIXME unmount only when both diskFree and checkZeronet have finished
                 // Promise.all() doesn't seem to do the job, though?
                 StorageUtils.diskFree(mp).then((freeSpace) => {
@@ -483,10 +507,12 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 });
 
                 this.checkZeronet().then(() => {}, () => {}).finally(() => {
+                    this.busy = false;
+
                     // Unmount again after having checked
                     // Give it some time to settle before trying to
                     setTimeout(() => {
-                        if (partition.mountedForChecking && Zeronet.currentPartitionItem !== this) {
+                        if (partition.mountedForChecking) {
                             partition.mountedForChecking = false;
                             partition.unmount().then(() => {
                                 console.log("Unmounted", partition.device, "again");
@@ -592,8 +618,10 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 }
 
                 // TODO only when there's more than one partition
-                this.copyButtonVisible = true;
+                this.copyToButtonVisible = true;
                 this.startButtonVisible = true;
+
+                this.zeronetPath = path;
 
                 // TODO Can I chain these promises rather than nesting them?
                 StorageUtils.diskUsage(path).then((usage) => {
@@ -620,6 +648,157 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 reject();
             });
         })
+    }
+
+}
+
+class Copier
+{
+
+    constructor() {
+        Copier.DBUS_INTERFACE = "com.netrunner.zeronet.cockpit.copier";
+
+        document.getElementById("cancel-target-selection").addEventListener("click", () => {
+            this.targetSelectionMode = false;
+        });
+        document.getElementById("copyCancel").addEventListener("click", () => {
+            alert("Not implemented yet");
+            // sledgehammer, at least use PID of cockpit.spawn, if we can get that..
+            //cockpit.spawn(["killall", "-9", "copy-zeronet"]);
+        });
+
+        this._popup = $("#copyPopup");
+
+        this._heading = document.getElementById("copyHeading");
+        this._progressBar = document.getElementById("copyProgressBar");
+        this._progressBarLabel = document.getElementById("copyProgressBarLabel");
+        this._label = document.getElementById("copyText");
+
+        this._dbusUtils = new DBusUtils({bus: "session"});
+
+        this._dbusUtils.onServiceRegistered((name) => {
+            if (name === Copier.DBUS_INTERFACE) {
+                this._serviceRegistered();
+            }
+        });
+        this._dbusUtils.onServiceUnregistered((name) => {
+            if (name === Copier.DBUS_INTERFACE) {
+                if (!this._registered) {
+                    return;
+                }
+
+                this._registered = false;
+                this._hide();
+            }
+        });
+    }
+
+    start() {
+        if (this._registered) {
+            throw new TypeError("Cannot start copy while already copying");
+        }
+
+        return new Promise((resolve, reject) => {
+            let proc = cockpit.spawn(["/usr/bin/copy-zeronet", this.fromPath, this.toPath]).done((result) => {
+                resolve();
+            }).fail(reject);
+        });
+    }
+
+    _serviceRegistered() {
+        if (this._registered) {
+            return;
+        }
+
+        this._registered = true;
+
+        this._progress = -1;
+        this._updateLabel();
+
+        this._show();
+
+        if (!this._copier) {
+            this._copier = cockpit.dbus("com.netrunner.zeronet.cockpit.copier", {
+                bus: "session"
+            });
+        }
+
+        this._subscription = this._copier.subscribe({
+            path: "/",
+            interface: "com.netrunner.zeronet",
+        }, (path, iface, signal, data) => {
+            switch (signal) {
+            case "Progress":
+                this._progress = data[0]/data[1];
+                this._filesCount = data[1];
+                this._updateLabel();
+                break;
+            case "Finished":
+                Zeronet.showMessage("success", "Successfully copied ZeroNet");
+                break;
+            case "Failed":
+                ZeroNet.showMessage("danger", "Failed to copy ZeroNet: " + data[0]);
+                console.warn("Failed to copy", data[0]);
+                break;
+            }
+        });
+    }
+
+    _serviceUnregistered() {
+        if (!this._registered) {
+            return;
+        }
+
+        this._registered = false;
+
+        if (this._subscription) {
+            this._subscription.remove();
+            this._subscription = null;
+        }
+
+        this._hide();
+    }
+
+    _updateLabel() {
+        var text = "";
+
+        if (this._filesCount > 0) {
+            text = `Copying <strong>${this._filesCount} files</strong> from <strong>${this.fromPath}</strong> to </strong>${this.toPath}</strong>…`;
+        } else {
+            text = `Copying from <strong>${this.fromPath}</strong> to <strong>${this.toPath}</strong>`;
+        }
+
+        this._label.innerHTML = text;
+    }
+
+    _show() {
+        this._popup.modal({
+            backdrop: "static",
+            keyboard: false
+        });
+    }
+
+    _hide() {
+        this._popup.modal("hide");
+    }
+
+    get targetSelectionMode() {
+        return document.body.classList.contains("target-selection");
+    }
+    set targetSelectionMode(enable) {
+        document.body.classList[enable ? "add" : "remove"]("target-selection");
+    }
+
+    set _progress(progress) {
+        let percent = Math.round(progress * 100);
+        if (percent >= 0 && percent <= 100) {
+            this._progressBar.style.width = percent + "%";
+            this._progressBarLabel.innerText = percent + " %";
+        } else {
+            this._progressBar.style.width = "100%";
+            this._progressBarLabel.innerText = "–";
+        }
+        // TODO aria range
     }
 
 }
@@ -662,6 +841,8 @@ udisks.onDriveAdded((drive) => {
 
 var mainBusy = document.getElementById("mainbusy");
 mainBusy.classList.remove("hidden");
+
+var copier = new Copier();
 
 // Check for whether the external drive zeronet is on is present
 Zeronet.currentZeronetUuid().then((uuid) => {
@@ -721,8 +902,6 @@ udisks.drives.then((drives) => {
 
             partitions.forEach((partition) => {
 
-                console.log(partition);
-
                 var uiPartiton = new ZeronetPartition(drive, partition);
 
                 zeronet.getUnit().then((unit) => {
@@ -768,8 +947,38 @@ udisks.drives.then((drives) => {
                         });
                     });
 
-                    uiPartiton.onCopyButtonClicked(() => {
-                        alert("Not yet implemented");
+                    uiPartiton.onCopyToButtonClicked(() => {
+
+                        // Disallow copying onto ourself
+                        document.querySelectorAll("[data-id='copyHereButton']").forEach((item) => {
+                            // reset for all others
+                            // TODO check fs and what not
+                            item.classList.remove("hidden");
+                        });
+                        uiPartiton.copyHereButtonVisible = false;
+
+                        copier.targetSelectionMode = true;
+                        // also store uuid?
+                        copier.fromPath = uiPartiton.zeronetPath;
+                    });
+
+                    uiPartiton.onCopyHereButtonClicked(() => {
+                        // FIXME mount first
+                        if (!partition.mountpoint) {
+                            alert("Need to mount first, not implemented yet");
+                            copier.targetSelectionMode = false;
+                            return;
+                        }
+
+                        copier.toPath = partition.mountpoint;
+
+                        copier.start().then(() => {
+                            copier.targetSelectionMode = false; // TODO finally?
+                        }, (err) => {
+                            Zeronet.showMessage("warning", "Failed to start copying: " + err.message);
+                            console.warn("Failed to start copy", err);
+                            copier.targetSelectionMode = false;
+                        });
                     });
 
                     var unitSubStateChanged = (newState) => {
@@ -786,7 +995,7 @@ udisks.drives.then((drives) => {
                         // When running, the current must be stopped before anything else can be done
                         // like starting a different one or copying over
                         uiPartiton.startButtonEnabled = isStopped;
-                        uiPartiton.copyButtonEnabled = isStopped;
+                        uiPartiton.copyToButtonEnabled = isStopped;
 
                         document.getElementById("openBtn").disabled = (newState === "running") ? "" : "disabled";
                     };

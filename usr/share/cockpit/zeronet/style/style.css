@@ -1,0 +1,7 @@
+body.target-selection .target-selection-hidden {
+    display: none;
+}
+
+body:not(.target-selection) .target-selection-shown {
+    display: none;
+}

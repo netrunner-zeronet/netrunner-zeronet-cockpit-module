@@ -2,12 +2,18 @@
     <title>Pinger</title>
     <meta charset="utf-8">
     <link href="../base1/cockpit.css" type="text/css" rel="stylesheet">
-    <link href="storage.css" type="text/css" rel="stylesheet">
+    <link href="style/style.css" type="text/css" rel="stylesheet">
     <script src="../base1/jquery.js"></script>
     <script src="../base1/cockpit.js"></script>
 </head>
 <body>
     <div id="main-container" class="container-fluid">
+
+        <div class="alert alert-info target-selection-shown" role="alert">
+            Choose where to copy this ZeroNet instance to.
+
+            <button id="cancel-target-selection" class="btn btn-default">Cancel</button>
+        </div>
 
         <div id="messages"></div>
 
@@ -17,6 +23,31 @@
 
         <button class="btn btn-default btn-secondary" id="openSystemdBtn">Advanced Options</button>
         <button class="btn btn-default btn-primary" id="openBtn" disabled>Open Zeronet</button>
+
+        <div id="copyPopup" class="modal fade" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="copyHeading">Copying ZeroNet</h4>
+                    </div>
+                    <div class="modal-body">
+                        <div class="progress-description">
+                            <div class="spinner spinner-xs spinner-inline"></div> <span id="copyText"></span>
+                        </div>
+                        <div class="progress progress-label-top-right">
+                            <div id="copyProgressBar" class="progress-bar" role="progressbar" style="width: 0%;">
+                                <span id="copyProgressBarLabel">0%</span>
+                            </div>
+                        </div>
+
+                        <p>Note: No files are being copied at this point, this is not yet implemented</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-danger" id="copyCancel">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
     </div>
     <script src="utils.js"></script>
