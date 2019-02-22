@@ -710,7 +710,7 @@ class Copier
         return new Promise((resolve, reject) => {
             // NOTE Cannot use cockpit.spawn here as the process will exit as soon as the website closes or is reloaded
             // but we want the progress to carry on without is (which is what all the DBus reporting is for)
-            let proc = cockpit.script(`/usr/bin/copy-zeronet '${this.fromPath}' '${this.toPath}' shit`).done((result) => {
+            let proc = cockpit.script(`/usr/bin/copy-zeronet '${this.fromPath}' '${this.toPath}'`).done((result) => {
                 resolve();
             }).fail(reject);
         });
