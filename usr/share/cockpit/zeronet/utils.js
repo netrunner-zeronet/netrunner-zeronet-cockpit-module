@@ -173,6 +173,13 @@ class DBusUtils
         this._args = args || {};
     }
 
+    get _client() {
+        if (!this._dbusClient) {
+            this._dbusClient = cockpit.dbus("org.freedesktop.DBus", this._args);
+        }
+        return this._dbusClient;
+    }
+
     onServiceRegistered(cb) {
         this._setupSignalHandlers();
         if (!this._serviceRegisteredCbs) {
@@ -191,13 +198,13 @@ class DBusUtils
 
     isServiceRegistered(name) {
         return new Promise((resolve, reject) => {
-
+            this._client.call("/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames").done((data) => {
+                resolve(data[0].includes(name));
+            }, reject);
         });
     }
 
     _setupSignalHandlers() {
-        this._client = cockpit.dbus("org.freedesktop.DBus", this._args);
-
         this._proxy = this._client.proxy("org.freedesktop.DBus",
                                          "/org/freedesktop/DBus");
         this._proxy.addEventListener("signal", (e) => {
