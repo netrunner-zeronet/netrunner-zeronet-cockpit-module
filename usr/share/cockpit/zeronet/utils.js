@@ -165,3 +165,70 @@ class LocaleUtils
     }
 
 }
+
+class DBusUtils
+{
+
+    constructor(args) {
+        this._args = args || {};
+    }
+
+    onServiceRegistered(cb) {
+        this._setupSignalHandlers();
+        if (!this._serviceRegisteredCbs) {
+            this._serviceRegisteredCbs = [];
+        }
+        this._serviceRegisteredCbs.push(cb);
+    }
+
+    onServiceUnregistered(cb) {
+        this._setupSignalHandlers();
+        if (!this._serviceUnregisteredCbs) {
+            this._serviceUnregisteredCbs = [];
+        }
+        this._serviceUnregisteredCbs.push(cb);
+    }
+
+    isServiceRegistered(name) {
+        return new Promise((resolve, reject) => {
+
+        });
+    }
+
+    _setupSignalHandlers() {
+        this._client = cockpit.dbus("org.freedesktop.DBus", this._args);
+
+        this._proxy = this._client.proxy("org.freedesktop.DBus",
+                                         "/org/freedesktop/DBus");
+        this._proxy.addEventListener("signal", (e) => {
+            if (e.detail[1] === "NameOwnerChanged") {
+                var serviceName = e.detail[2][0];
+                if (!serviceName) { // can this happen?
+                    return;
+                }
+                var oldOwner = e.detail[2][1];
+                var newOwner = e.detail[2][2];
+
+                if (!oldOwner && !newOwner) { // can this happen?
+                    return;
+                }
+
+                var cbsToCall = undefined;
+
+                // should we check for typeof string?
+                if (!oldOwner && newOwner) {
+                    cbsToCall = this._serviceRegisteredCbs;
+                } else {
+                    cbsToCall = this._serviceUnregisteredCbs;
+                }
+
+                if (cbsToCall && cbsToCall.length > 0) {
+                    cbsToCall.forEach((cb) => {
+                        cb(serviceName); // pass along owner?
+                    });
+                }
+            }
+        });
+    }
+
+}
