@@ -226,7 +226,7 @@ class ZeronetPartitionTemplate
         var text = "";
         // FIXME this._status is only ZeronetPartition
         // so we kinda break the separation between "dumb UI" (template) and "logic UI" (uiPartiton) here
-        if (this._lastUsedDate && this._status !== "running") {
+        if (this._lastUsedDate && [undefined, "", "failed", "dead"].includes(this._status)) {
             // TODO proper locale, but the page is English right now so be consistent with that
             // GB ensures a sane order of date-month-year over US
             text = `Last used <strong>${this._lastUsedDate.toLocaleString("en-GB")}</strong>`;
@@ -578,6 +578,9 @@ class ZeronetPartition extends ZeronetPartitionTemplate
         case "dead":
             this.headingBadge = "";//"Not running";
             //this.startButtonVisible = true;
+            this.checkLastUsed().then(() => {
+                this._updateLastUsedInfo();
+            }, (err) => {});
             break;
         case "":
             this.headingBadge = "";
@@ -627,13 +630,7 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 StorageUtils.diskUsage(path).then((usage) => {
                     this.zeronet = `<strong>${LocaleUtils.formatSize(usage)}</strong> folder at ${path}`;
 
-                    StorageUtils.mtime(path + "/data").then((result) => {
-                        // TODO proper locale but UI is English for now, so be consistent with that here
-                        this.lastUsed = result;
-                    }, (err) => {
-                        console.warn("Failed to determine last usage on", this._partition.mountpoint, "which is", this._partition.device, "in", path, err);
-                        this.lastUsed = undefined;
-                    });
+                    this.checkLastUsed();
 
                     resolve();
                 }, (err) => {
@@ -648,6 +645,25 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 reject();
             });
         })
+    }
+
+    checkLastUsed(path) {
+        path = path || this.zeronetPath;
+        if (!path) {
+            throw new TypeError("Cannot determine last used without path");
+        }
+
+        return new Promise((resolve, reject) => {
+            StorageUtils.mtime(path + "/data").then((result) => {
+                // TODO proper locale but UI is English for now, so be consistent with that here
+                this.lastUsed = result;
+                resolve();
+            }, (err) => {
+                console.warn("Failed to determine last usage on", this._partition.mountpoint, "which is", this._partition.device, "in", path, err);
+                this.lastUsed = undefined;
+                reject(err);
+            });
+        });
     }
 
 }
