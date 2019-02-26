@@ -561,6 +561,7 @@ class ZeronetPartition extends ZeronetPartitionTemplate
             this.headingBadgeType = "warning";
             this.busy = true;
             break;
+        case "stop-post":
         case "stop-sigterm":
         case "final-sigterm":
         case "stop-sigkill":
