@@ -649,12 +649,12 @@ class ZeronetPartition extends ZeronetPartitionTemplate
     }
 
     checkLastUsed(path) {
-        path = path || this.zeronetPath;
-        if (!path) {
-            throw new TypeError("Cannot determine last used without path");
-        }
-
         return new Promise((resolve, reject) => {
+            path = path || this.zeronetPath;
+            if (!path) {
+                return reject("Cannot determine last used without path");
+            }
+
             StorageUtils.mtime(path + "/data").then((result) => {
                 // TODO proper locale but UI is English for now, so be consistent with that here
                 this.lastUsed = result;
