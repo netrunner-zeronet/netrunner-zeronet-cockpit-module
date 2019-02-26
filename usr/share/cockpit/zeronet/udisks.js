@@ -283,6 +283,7 @@ class UDisksPartition
         return new Promise((resolve, reject) => {
             this._filesystemProxy.call("Unmount", [{}]).done(() => {
                 this._setMountpoint("");
+                resolve();
             }).fail(reject);
         });
     }
