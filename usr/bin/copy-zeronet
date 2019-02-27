@@ -30,9 +30,18 @@ import os
 import shutil
 import math
 
+try:
+    from gi.repository import GLib
+except ImportError:
+    import glib as GLib
+
 from time import sleep # FIXME
 
 from dbus.mainloop.glib import DBusGMainLoop
+
+src = ""
+dest = ""
+filesCount = 0
 
 class DBusService(dbus.service.Object):
     def __init__(self, path):
@@ -40,8 +49,17 @@ class DBusService(dbus.service.Object):
 
     # TODO add getters for source, destination, perhaps even UUID
     # so we can query that if we didn't trigger the script ourself
-    #@dbus.service.method(dbus_interface="com.netrunner.zeronet",
-                         #in_signature="", out_signature="s"
+    @dbus.service.method(dbus_interface="com.netrunner.zeronet",
+                         in_signature="", out_signature="a{sv}")
+    def Info(self):
+        dict = dbus.Dictionary({
+            dbus.String(u"fromPath"): src,
+            dbus.String(u"toPath"): dest,
+            dbus.String(u"filesCount"): filesCount
+        },
+        signature = dbus.Signature("sv")
+        )
+        return dict
 
     @dbus.service.signal(dbus_interface="com.netrunner.zeronet")
     def Progress(self, copied, total):
@@ -79,6 +97,7 @@ if __name__ == "__main__":
         sys.exit(2)
 
     DBusGMainLoop(set_as_default=True)
+    mainloop = GLib.MainLoop()
 
     try:
         bus_name = dbus.service.BusName("com.netrunner.zeronet.cockpit.copier",
@@ -117,6 +136,8 @@ if __name__ == "__main__":
 
                 if math.fmod(copiedCount, reportAfter) == 0:
                     dbusService.Progress(copiedCount, filesCount)
+                    # Process events
+                    mainloop.get_context().iteration(may_block = False)
                     sleep(0.05) # FIXME Look like work is being done
 
     except Exception as e:
