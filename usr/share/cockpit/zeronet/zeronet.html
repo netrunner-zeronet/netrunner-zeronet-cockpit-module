@@ -47,6 +47,29 @@
             </div>
         </div>
 
+        <div id="copyRenamePopup" class="modal fade" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="copyHeading">Copy ZeroNet</h4>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+
+                    <div class="modal-body" id="copyResultContents">
+                        <p>There is already a ZeroNet instance on this partition.</p>
+                        <p>Would you like to rename it to <strong id="copyResultPopupSuggestedName">Suggested Name</strong>?</p>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" id="copyRenameAccept">Rename and Start Copying</button>
+                        <button type="button" class="btn btn-default" id="copyRenameCancel" data-dismiss="modal">Don't Copy</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
     <script src="utils.js"></script>
     <script src="udisks.js"></script>

@@ -445,8 +445,8 @@ class ZeronetPartition extends ZeronetPartitionTemplate
     constructor(drive, partition) {
         super();
 
-        this._drive = drive;
-        this._partition = partition;
+        this.drive = drive;
+        this.partition = partition;
 
         this.headingBadge = ""; // remove once template dummy text is gone
 
@@ -513,7 +513,7 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 StorageUtils.diskFree(mp).then((freeSpace) => {
                     this.freeSpace = freeSpace;
                 }, (err) => {
-                    console.warn("Failed to get free space for", this._partition.device, "on", this._partition.mountpoint, err);
+                    console.warn("Failed to get free space for", this.partition.device, "on", this.partition.mountpoint, err);
                 });
 
                 this.checkZeronet().then(() => {}, () => {}).finally(() => {
@@ -611,11 +611,11 @@ class ZeronetPartition extends ZeronetPartitionTemplate
     checkZeronet() {
         return new Promise((resolve, reject) => {
 
-            if (!this._partition.mounted) {
+            if (!this.partition.mounted) {
                 return reject("Cannot check ZeroNet status without being mounted");
             }
 
-            let mp = this._partition.mountpoint;
+            let mp = this.partition.mountpoint;
             // Special case for our built-in one
             if (mp == "/") {
                 mp = "/opt/zeronet";
@@ -626,14 +626,16 @@ class ZeronetPartition extends ZeronetPartitionTemplate
             StorageUtils.dirExists(path).then((exists) => {
 
                 if (!exists) {
+                    this.startButtonVisible = false;
                     this.zeronet = "No ZeroNet found";
+                    this.zeronetPath = "";
                     // reject?
                     resolve(false);
                     return;
                 }
 
-                // TODO only when there's more than one partition
                 this.copyToButtonVisible = true;
+                // TODO only when there's more than one partition
                 this.startButtonVisible = true;
 
                 this.zeronetPath = path;
@@ -647,13 +649,13 @@ class ZeronetPartition extends ZeronetPartitionTemplate
 
                     resolve(true);
                 }, (err) => {
-                    console.warn("Failed to determine ZeroNet folder usage on", this._partition.mountpoint, "which is", this._partition.device, "in", path, err);
+                    console.warn("Failed to determine ZeroNet folder usage on", this.partition.mountpoint, "which is", this.partition.device, "in", path, err);
                     this.zeronet = "ZeroNet found";
                     resolve(true);
                 });
 
             }, (err) => {
-                console.warn("Failed to determine zeronet existance on", this._partition.mountpoint, "which is", this._partition.device, "in", path, err);
+                console.warn("Failed to determine zeronet existance on", this.partition.mountpoint, "which is", this.partition.device, "in", path, err);
                 this.zeronet = "Failed to check for ZeroNet (" + err.message + ")";
                 reject();
             });
@@ -672,7 +674,7 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 this.lastUsed = result;
                 resolve();
             }, (err) => {
-                console.warn("Failed to determine last usage on", this._partition.mountpoint, "which is", this._partition.device, "in", path, err);
+                console.warn("Failed to determine last usage on", this.partition.mountpoint, "which is", this.partition.device, "in", path, err);
                 this.lastUsed = undefined;
                 reject(err);
             });
@@ -715,12 +717,7 @@ class Copier
         });
         this._dbusUtils.onServiceUnregistered((name) => {
             if (name === Copier.DBUS_SERVICE) {
-                if (!this._registered) {
-                    return;
-                }
-
-                this._registered = false;
-                this._hide();
+                this._serviceUnregistered();
             }
         });
 
@@ -1100,19 +1097,39 @@ udisks.drives.then((drives) => {
 
                         copier.targetSelectionMode = true;
 
-                        copier.fromUuid = uiPartiton.uuid;
-                        //copier.fromUiPartition = uiPartiton;
+                        copier.fromUuid = partition.uuid;
+                        copier.fromUiPartition = uiPartiton;
                         copier.fromPath = uiPartiton.zeronetPath;
                     });
 
                     uiPartiton.onCopyHereButtonClicked(() => {
+                        if (!copier.fromUuid || !copier.fromUiPartition) {
+                            throw new TypeError("Cannot copy here without copy to");
+                        }
+
                         uiPartiton.busy = true;
 
                         copier.targetSelectionMode = false;
 
                         // TODO also mount source partition and check it so that zeronetSize is up to date
 
-                        Zeronet.mount(partition).then((wasMounted) => {
+                        Zeronet.mount(copier.fromUiPartition.partition).then((wasMounted) => {
+
+                            copier.fromUiPartition.partition.mountedForCopying = wasMounted;
+
+                        }).then(() => {
+
+                            return copier.fromUiPartition.checkZeronet();
+
+                        }).then(() => {
+
+                            if (!copier.fromUiPartition.zeronetPath) { // shouldn't happen
+                                return reject("No ZeroNet on source");
+                            }
+
+                            return Zeronet.mount(partition);
+
+                        }).then((wasMounted) => {
 
                             partition.mountedForCopying = wasMounted;
 
@@ -1125,11 +1142,42 @@ udisks.drives.then((drives) => {
                             return new Promise((resolve, reject) => {
 
                                 if (uiPartiton.zeronetPath) {
-                                    if (confirm("There is already an ZeroNet instanceon this partition.\n\n\Do you want to overwrite it?\n\nRenaming an existing instance is not yet implemented.")) {
-                                        resolve();
+                                    let newName = "ZeroNet-master_";
+                                    // FIXME make sure the new path also doesn't exist
+                                    if (uiPartiton.lastUsed) {
+                                        // lol
+                                        newName += uiPartiton.lastUsed.toISOString().slice(0, 16).replace(/[\-\:]/g, "").replace("T", "-");
                                     } else {
-                                        reject("overwrite rejected");
+                                        newName = "old";
                                     }
+
+                                    let renamePopup = $("#copyRenamePopup");
+
+                                    let accepted = false;
+
+                                    renamePopup.on("hidden.bs.modal", () => {
+                                        if (accepted) {
+
+                                            // can we add this to the chain, too?
+                                            return StorageUtils.move(uiPartiton.zeronetPath,
+                                                                     uiPartiton.zeronetPath.replace("/ZeroNet-master", "/" + newName))
+                                                                     .then(resolve, reject);
+
+                                        } else {
+                                            reject("Canceled");
+                                        }
+                                    });
+
+                                    document.getElementById("copyResultPopupSuggestedName").innerText = newName;
+
+                                    // FIXME return key
+                                    document.getElementById("copyRenameAccept").addEventListener("click", () => {
+                                        accepted = true;
+                                        renamePopup.modal("hide");
+                                    });
+
+                                    renamePopup.modal("show");
+
                                     return;
                                 }
 
@@ -1145,12 +1193,23 @@ udisks.drives.then((drives) => {
 
                             uiPartiton.freeSpace = freeSpace;
 
-                            //alert("Not yet implemented: Check for sufficient free space")
+                            return new Promise((resolve, reject) => {
+                                // add 5% contingency space
+                                if (uiPartiton.freeSpace < copier.fromUiPartition.zeronetSize * 1.05) {
+                                    // TODO tell user how much more is needed
+                                    return reject("Insufficient free space");
+                                }
 
-                            copier.toPath = partition.mountpoint + "/ZeroNet-master";
-                            copier.toUuid = partition.uuid;
+                                copier.toUuid = partition.uuid;
+                                copier.toUiPartition = uiPartiton;
+                                copier.toPath = partition.mountpoint + "/ZeroNet-master";
+                                resolve();
+                            });
+
+                        }).then(() => {
 
                             return copier.start()
+
                         }).then(() => {
                             //
                         }, (err) => {
