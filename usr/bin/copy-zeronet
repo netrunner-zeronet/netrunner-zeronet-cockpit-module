@@ -76,7 +76,7 @@ class DBusService(dbus.service.Object):
         return True
 
     @dbus.service.signal(dbus_interface="com.netrunner.zeronet")
-    def Progress(self, copied, total):
+    def Progress(self, processed, total):
         pass
 
     @dbus.service.signal(dbus_interface="com.netrunner.zeronet")
@@ -125,7 +125,7 @@ if __name__ == "__main__":
 
     print("Copying", filesCount, "from", src, "to", dest)
 
-    copiedCount = 0
+    processedCount = 0
 
     # Ensure we only report on dbus every percent, not every file, which spams the bus
     reportAfter = max(1, math.ceil(filesCount / 100))
@@ -144,18 +144,25 @@ if __name__ == "__main__":
                 destFile = os.path.join(path.replace(src, dest), sfile)
 
                 try:
-                    shutil.copy(srcFile, destFile)
+                    # copyfile does not preserve permissions, we first want to make sure everything gets copied
+                    shutil.copyfile(srcFile, destFile)
                 except Exception as e:
                     dbusService.Failure(srcFile, str(e))
                     errorEncountered = True
 
-                copiedCount += 1
+                try:
+                    shutil.chown(destFile, "zeronet", "zeronet")
+                    os.chmod(destFile, 511) # 777
+                except:
+                    pass
 
-                if math.fmod(copiedCount, reportAfter) == 0:
-                    dbusService.Progress(copiedCount, filesCount)
+                processedCount += 1
+
+                if math.fmod(processedCount, reportAfter) == 0:
+                    dbusService.Progress(processedCount, filesCount)
                     # Process events
                     mainloop.get_context().iteration(may_block = False)
-                    sleep(0.05) # FIXME Look like work is being done
+                    #sleep(0.05) # FIXME Look like work is being done
 
     except Exception as e:
         print("Exception file copying", str(e))
