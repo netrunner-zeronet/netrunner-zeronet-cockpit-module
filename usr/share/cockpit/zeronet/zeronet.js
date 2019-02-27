@@ -101,6 +101,23 @@ class Zeronet
         document.getElementById("messages").appendChild(element);
     }
 
+    // Mounts a partition if not mounted or just resolves if already mounted
+    static mount(partition) {
+        return new Promise((resolve, reject) => {
+            if (partition.mounted) {
+                // would be nice to also pass the mountpoint
+                // but promise handlers don't support multi-arg
+                return resolve(false /*wasMounted*/);
+            }
+
+            partition.mount().then((mp) => {
+                resolve(true /*wasMounted*/);
+            }, (err) => {
+                reject(err);
+            });
+        });
+    }
+
 }
 
 class ZeronetPartitionTemplate
@@ -484,17 +501,10 @@ class ZeronetPartition extends ZeronetPartitionTemplate
 
             this.busy = true;
 
-            // Helper promise that resolves immediately if mounted or mounts first
-            new Promise((resolve, reject) => {
-                if (partition.mounted) {
-                    return resolve(partition.mountpoint);
-                }
+            Zeronet.mount(partition).then((wasMounted) => {
+                let mp = partition.mountpoint;
 
-                partition.mount().then((mp) => {
-                    partition.mountedForChecking = true;
-                    resolve(mp);
-                }, reject);
-            }).then((mp) => {
+                partition.mountedForChecking = wasMounted;
 
                 this.busy = true;
 
@@ -630,6 +640,7 @@ class ZeronetPartition extends ZeronetPartitionTemplate
                 // TODO Can I chain these promises rather than nesting them?
                 StorageUtils.diskUsage(path).then((usage) => {
                     this.zeronet = `<strong>${LocaleUtils.formatSize(usage)}</strong> folder at ${path}`;
+                    this.zeronetSize = usage;
 
                     this.checkLastUsed();
 
@@ -673,7 +684,8 @@ class Copier
 {
 
     constructor() {
-        Copier.DBUS_INTERFACE = "com.netrunner.zeronet.cockpit.copier";
+        Copier.DBUS_SERVICE = "com.netrunner.zeronet.cockpit.copier";
+        Copier.DBUS_INTERFACE = "com.netrunner.zeronet"
 
         document.getElementById("cancel-target-selection").addEventListener("click", () => {
             this.targetSelectionMode = false;
@@ -691,15 +703,19 @@ class Copier
         this._progressBarLabel = document.getElementById("copyProgressBarLabel");
         this._label = document.getElementById("copyText");
 
-        this._dbusUtils = new DBusUtils({bus: "session"});
+        this._dbusOptions = {
+            bus: "session"
+        };
+
+        this._dbusUtils = new DBusUtils(this._dbusOptions);
 
         this._dbusUtils.onServiceRegistered((name) => {
-            if (name === Copier.DBUS_INTERFACE) {
+            if (name === Copier.DBUS_SERVICE) {
                 this._serviceRegistered();
             }
         });
         this._dbusUtils.onServiceUnregistered((name) => {
-            if (name === Copier.DBUS_INTERFACE) {
+            if (name === Copier.DBUS_SERVICE) {
                 if (!this._registered) {
                     return;
                 }
@@ -709,10 +725,21 @@ class Copier
             }
         });
 
-        this._dbusUtils.isServiceRegistered(Copier.DBUS_INTERFACE).then((registered) => {
+        this._dbusUtils.isServiceRegistered(Copier.DBUS_SERVICE).then((registered) => {
             if (registered) {
-                // TODO get path and so on
-                this._serviceRegistered();
+
+                let client = cockpit.dbus(Copier.DBUS_SERVICE, this._dbusOptions);
+                client.call("/", Copier.DBUS_INTERFACE, "Info").then((data) => {
+                    let info = data[0];
+                    copier.fromPath = info.fromPath.v;
+                    copier.toPath = info.toPath.v;
+                    copier.filesCount = info.filesCount.v;
+
+                    this._serviceRegistered();
+                }).fail((err) => {
+                    console.warn("Failed to get info about running copy progress", err);
+                    Zeronet.showMessage("warning", "A copy operation is in progress but getting information about it failed: " + err.message);
+                });
             }
         }, (err) => {
             console.warn("Failed to check whether copier is already registered", err);
@@ -731,6 +758,20 @@ class Copier
                 resolve();
             }).fail(reject);
         });
+    }
+
+    onFinished(cb) {
+        if (!this._finishedCbs) {
+            this._finishedCbs = [];
+        }
+        this._finishedCbs.push(cb);
+    }
+
+    onFailed(cb) {
+        if (!this._failedCbs) {
+            this._failedCbs = [];
+        }
+        this._failedCbs.push(cb);
     }
 
     _serviceRegistered() {
@@ -758,15 +799,23 @@ class Copier
             switch (signal) {
             case "Progress":
                 this._progress = data[0]/data[1];
-                this._filesCount = data[1];
+                this.filesCount = data[1];
                 this._updateLabel();
                 break;
             case "Finished":
-                Zeronet.showMessage("success", "Successfully copied ZeroNet");
+                if (this._finishedCbs) {
+                    this._finishedCbs.forEach((cb) => {
+                        cb();
+                    });
+                }
                 break;
             case "Failed":
-                ZeroNet.showMessage("danger", "Failed to copy ZeroNet: " + data[0]);
-                console.warn("Failed to copy", data[0]);
+                let err = data[0];
+                if (this._failedCbs) {
+                    this._failedCbs.forEach((cb) => {
+                        cb(err);
+                    });
+                }
                 break;
             }
         });
@@ -790,10 +839,10 @@ class Copier
     _updateLabel() {
         var text = "";
 
-        if (this._filesCount > 0) {
-            text = `Copying <strong>${this._filesCount} files</strong> from <strong>${this.fromPath}</strong> to </strong>${this.toPath}</strong>…`;
+        if (this.filesCount > 0) {
+            text = `Copying <strong>${this.filesCount} files</strong> from <strong>${this.fromPath}</strong> to </strong>${this.toPath}</strong>…`;
         } else {
-            text = `Copying from <strong>${this.fromPath}</strong> to <strong>${this.toPath}</strong>`;
+            text = `Copying from <strong>${this.fromPath}</strong> to <strong>${this.toPath}</strong>…`;
         }
 
         this._label.innerHTML = text;
@@ -981,32 +1030,86 @@ udisks.drives.then((drives) => {
                         document.querySelectorAll("[data-id='copyHereButton']").forEach((item) => {
                             // reset for all others
                             // TODO check fs and what not
+                            // TODO disallow copying to internal sd
                             item.classList.remove("hidden");
                         });
                         uiPartiton.copyHereButtonVisible = false;
 
                         copier.targetSelectionMode = true;
-                        // also store uuid?
+
+                        copier.fromUuid = uiPartiton.uuid;
+                        //copier.fromUiPartition = uiPartiton;
                         copier.fromPath = uiPartiton.zeronetPath;
                     });
 
                     uiPartiton.onCopyHereButtonClicked(() => {
-                        // FIXME mount first
-                        if (!partition.mountpoint) {
-                            alert("Need to mount first, not implemented yet");
-                            copier.targetSelectionMode = false;
-                            return;
+                        uiPartiton.busy = true;
+
+                        copier.targetSelectionMode = false;
+
+                        // TODO also mount source partition and check it so that zeronetSize is up to date
+
+                        Zeronet.mount(partition).then((wasMounted) => {
+
+                            partition.mountedForCopying = wasMounted;
+
+                        }).then(() => {
+
+                            return uiPartiton.checkZeronet();
+
+                        }).then(() => {
+
+                            return new Promise((resolve, reject) => {
+
+                                if (uiPartiton.zeronetPath) {
+                                    // TODO ask whether to overwrite
+                                    alert("Not yet implemented: there's a ZeroNet instance already, ask whether to rename the existing instance")
+                                    resolve();
+                                    return;
+                                }
+
+                                resolve();
+
+                            });
+
+                        }).then(() => {
+
+                            return StorageUtils.diskFree(partition.mountpoint);
+
+                        }).then((freeSpace) => {
+                            uiPartiton.freeSpace = freeSpace;
+
+                            alert("Not yet implemented: Check for sufficient free space")
+
+                            copier.toPath = partition.mountpoint;
+                            copier.toUuid = partition.uuid;
+
+                            return copier.start()
+                        }).then(() => {
+
+                        }, (err) => {
+                            Zeronet.showMessage("warning", "Failed to start copying: " + err);
+                            console.warn("Failed to start copy", err);
+                        }).finally(() => {
+                            uiPartiton.busy = false;
+                        });
+
+                    });
+
+                    copier.onFinished(() => {
+                        // now unmount again
+                        if (partition.mountedForCopying
+                            && ((copier.fromUuid && copier.fromUuid === partition.uuid) || (copier.toUuid && copier.toUuid === partition.uuid))) {
+                            console.log("Unmount", partition, "after copying finished");
+                            partition.unmount().then(() => {}, (err) => { console.warn("Failed to unmount", partition, "after copying", err); });
                         }
 
-                        copier.toPath = partition.mountpoint;
+                        Zeronet.showMessage("success", "Successfully copied ZeroNet");
+                    });
 
-                        copier.start().then(() => {
-                            copier.targetSelectionMode = false; // TODO finally?
-                        }, (err) => {
-                            Zeronet.showMessage("warning", "Failed to start copying: " + err.message);
-                            console.warn("Failed to start copy", err);
-                            copier.targetSelectionMode = false;
-                        });
+                    copier.onFailed((err) => {
+                        ZeroNet.showMessage("danger", "Failed to copy ZeroNet: " + err);
+                        console.warn("Failed to copy zeronet", err);
                     });
 
                     var unitSubStateChanged = (newState) => {
