@@ -1121,9 +1121,11 @@ udisks.drives.then((drives) => {
                             return new Promise((resolve, reject) => {
 
                                 if (uiPartiton.zeronetPath) {
-                                    // TODO ask whether to overwrite
-                                    //alert("Not yet implemented: there's a ZeroNet instance already, ask whether to rename the existing instance")
-                                    resolve();
+                                    if (confirm("There is already an ZeroNet instanceon this partition.\n\n\Do you want to overwrite it?\n\nRenaming an existing instance is not yet implemented.")) {
+                                        resolve();
+                                    } else {
+                                        reject("overwrite rejected");
+                                    }
                                     return;
                                 }
 
