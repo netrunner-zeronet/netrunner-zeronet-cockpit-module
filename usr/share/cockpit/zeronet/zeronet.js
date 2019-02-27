@@ -959,13 +959,17 @@ var copier = new Copier();
 copier.onFinished((withError) => {
     if (withError) {
         if (copier.failedPaths) {
-            // let user see which files?
-            Zeronet.showMessage("warning", `Failed to copy <strong>${copier.failedPaths.length} ZeroNet files</strong> out of ${copier.filesCount}.`);
+            if (copier.failedPaths.length === 1) {
+                Zeronet.showMessage("warning", `Failed to copy <strong>${copier.failedPaths[0]}</strong>.`);
+            } else {
+                // let user see which files?
+                Zeronet.showMessage("warning", `Failed to copy <strong>${copier.failedPaths.length} ZeroNet files</strong> out of ${copier.filesCount}.`);
+            }
         } else {
             Zeronet.showMessage("warning", "Failed to copy ZeroNet");
         }
     } else {
-        Zeronet.showMessage("success", "Successfully copied ZeroNet");
+        Zeronet.showMessage("success", `Successfully copied ZeroNet to <strong>${copier.toPath}</strong>`);
     }
 });
 copier.onStarted(() => {
@@ -1159,11 +1163,15 @@ udisks.drives.then((drives) => {
                     });
 
                     copier.onFinished(() => {
-                        // now unmount again
-                        if (partition.mountedForCopying
+                        // should we unmount again?
+                        /*if (partition.mountedForCopying
                             && ((copier.fromUuid && copier.fromUuid === partition.uuid) || (copier.toUuid && copier.toUuid === partition.uuid))) {
                             console.log("Unmount", partition, "after copying finished");
                             partition.unmount().then(() => {}, (err) => { console.warn("Failed to unmount", partition, "after copying", err); });
+                        }*/
+
+                        if (copier.toUuid === partition.uuid) {
+                            uiPartiton.checkZeronet();
                         }
                     });
 
