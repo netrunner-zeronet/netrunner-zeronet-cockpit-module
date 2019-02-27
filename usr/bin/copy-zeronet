@@ -12,6 +12,7 @@ Exit codes:
 2 - No files were found to copy (check permissions?)
 3 - DBus service already running (already copying something?)
 4 - An error occurred while copying (also emitted as DBus signal "Failed")
+5 - Copying was canceled by the user
 
 DBus:
 Service Name:
@@ -61,16 +62,29 @@ class DBusService(dbus.service.Object):
         )
         return dict
 
+    @dbus.service.method(dbus_interface="com.netrunner.zeronet",
+                         in_signature="", out_signature="b")
+    def Cancel(self):
+        # not really an error?
+        errorEncountered = True
+        self.Finished(errorEncountered)
+        # just exiting here causes a dbus error
+        # but setting a "wasCanceled" variable and then exiting
+        # in the copy loop doesn't seem to work
+        sys.exit(5)
+
+        return True
+
     @dbus.service.signal(dbus_interface="com.netrunner.zeronet")
     def Progress(self, copied, total):
         pass
 
     @dbus.service.signal(dbus_interface="com.netrunner.zeronet")
-    def Finished(self):
+    def Finished(self, withError):
         pass
 
     @dbus.service.signal(dbus_interface="com.netrunner.zeronet")
-    def Failed(self, errorString):
+    def Failure(self, path, errorString):
         pass
 
 
@@ -116,21 +130,24 @@ if __name__ == "__main__":
     # Ensure we only report on dbus every percent, not every file, which spams the bus
     reportAfter = max(1, math.ceil(filesCount / 100))
 
+    errorEncountered = False
+
     try:
         for path, dirs, filenames in os.walk(src):
             for directory in dirs:
-                destDir = path.replace(src,dest)
-                # FIXME Enable once cockpit is set up and we can make sure we don't break things :)
-                #if not os.path.exists(destDir):
-                    #os.makedirs(destDir)
+                destDir = os.path.join(path.replace(src,dest), directory)
+                if not os.path.exists(destDir):
+                    os.makedirs(destDir)
 
             for sfile in filenames:
                 srcFile = os.path.join(path, sfile)
-
                 destFile = os.path.join(path.replace(src, dest), sfile)
 
-                # FIXME Enable once cockpit is set up and we can make sure we don't break things :)
-                #shutil.copy(srcFile, destFile)
+                try:
+                    shutil.copy(srcFile, destFile)
+                except Exception as e:
+                    dbusService.Failure(srcFile, str(e))
+                    errorEncountered = True
 
                 copiedCount += 1
 
@@ -142,9 +159,10 @@ if __name__ == "__main__":
 
     except Exception as e:
         print("Exception file copying", str(e))
-        dbusService.Failed(str(e))
+        errorEncountered = True
+        dbusService.Finished(errorEncountered)
         sys.exit(4)
 
     print("Done copying")
-    dbusService.Finished()
+    dbusService.Finished(errorEncountered)
     sys.exit(0)

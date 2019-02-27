@@ -627,7 +627,8 @@ class ZeronetPartition extends ZeronetPartitionTemplate
 
                 if (!exists) {
                     this.zeronet = "No ZeroNet found";
-                    reject();
+                    // reject?
+                    resolve(false);
                     return;
                 }
 
@@ -644,11 +645,11 @@ class ZeronetPartition extends ZeronetPartitionTemplate
 
                     this.checkLastUsed();
 
-                    resolve();
+                    resolve(true);
                 }, (err) => {
                     console.warn("Failed to determine ZeroNet folder usage on", this._partition.mountpoint, "which is", this._partition.device, "in", path, err);
                     this.zeronet = "ZeroNet found";
-                    resolve();
+                    resolve(true);
                 });
 
             }, (err) => {
@@ -691,9 +692,7 @@ class Copier
             this.targetSelectionMode = false;
         });
         document.getElementById("copyCancel").addEventListener("click", () => {
-            alert("Not implemented yet");
-            // sledgehammer, at least use PID of cockpit.spawn, if we can get that..
-            //cockpit.spawn(["killall", "-9", "copy-zeronet"]);
+            copier.cancel();
         });
 
         this._popup = $("#copyPopup");
@@ -728,8 +727,7 @@ class Copier
         this._dbusUtils.isServiceRegistered(Copier.DBUS_SERVICE).then((registered) => {
             if (registered) {
 
-                let client = cockpit.dbus(Copier.DBUS_SERVICE, this._dbusOptions);
-                client.call("/", Copier.DBUS_INTERFACE, "Info").then((data) => {
+                this._client().call("/", Copier.DBUS_INTERFACE, "Info").then((data) => {
                     let info = data[0];
                     copier.fromPath = info.fromPath.v;
                     copier.toPath = info.toPath.v;
@@ -746,37 +744,68 @@ class Copier
         });
     }
 
-    start() {
-        if (this._registered) {
-            throw new TypeError("Cannot start copy while already copying");
+    _client() {
+        if (!this._dbusClient) {
+            this._dbusClient = cockpit.dbus(Copier.DBUS_SERVICE, this._dbusOptions);
         }
+        return this._dbusClient;
+    }
 
+    start() {
         return new Promise((resolve, reject) => {
+            if (this._registered) {
+                return reject("Cannot start copy while already copying");
+            }
+
             // NOTE Cannot use cockpit.spawn here as the process will exit as soon as the website closes or is reloaded
             // but we want the progress to carry on without is (which is what all the DBus reporting is for)
-            let proc = cockpit.script(`/usr/bin/copy-zeronet '${this.fromPath}' '${this.toPath}'`).done((result) => {
+            let cmd = `/usr/bin/copy-zeronet '${this.fromPath}' '${this.toPath}'`;
+            console.log("Start copy", cmd, {superuser: "try"});
+            let proc = cockpit.script(cmd).done((result) => {
                 resolve();
-            }).fail(reject);
+            // TODO check if we need this since we get a Finished signal
+            // but might not be connected (when copy finishes too qucikly)
+            }).fail((err) => {
+                reject(err);
+            });
+            //proc.stream(console.log);
         });
     }
 
+    cancel() {
+        return new Promise((resolve, reject) => {
+            this._client().call("/", Copier.DBUS_INTERFACE, "Cancel").done(resolve).fail(reject);
+        });
+    }
+
+    onStarted(cb) {
+        if (!this._startedCbs) {
+            this._startedCbs = [];
+        }
+        this._startedCbs.push(cb);
+    }
     onFinished(cb) {
         if (!this._finishedCbs) {
             this._finishedCbs = [];
         }
         this._finishedCbs.push(cb);
     }
-
-    onFailed(cb) {
-        if (!this._failedCbs) {
-            this._failedCbs = [];
+    onFailure(cb) {
+        if (!this._failureCbs) {
+            this._failureCbs = [];
         }
-        this._failedCbs.push(cb);
+        this._failureCbs.push(cb);
     }
 
     _serviceRegistered() {
         if (this._registered) {
             return;
+        }
+
+        if (this._startedCbs) {
+            this._startedCbs.forEach((cb) => {
+                cb();
+            });
         }
 
         this._registered = true;
@@ -804,16 +833,23 @@ class Copier
                 break;
             case "Finished":
                 if (this._finishedCbs) {
+                    let withError = data[0];
+                    let err = data[1];
                     this._finishedCbs.forEach((cb) => {
-                        cb();
+                        if (withError) {
+                            cb(true, err);
+                        } else {
+                            cb(false);
+                        }
                     });
                 }
                 break;
-            case "Failed":
-                let err = data[0];
-                if (this._failedCbs) {
-                    this._failedCbs.forEach((cb) => {
-                        cb(err);
+            case "Failure":
+                let path = data[0];
+                let err = data[1];
+                if (this._failureCbs) {
+                    this._failureCbs.forEach((cb) => {
+                        cb(path, err);
                     });
                 }
                 break;
@@ -920,6 +956,29 @@ var mainBusy = document.getElementById("mainbusy");
 mainBusy.classList.remove("hidden");
 
 var copier = new Copier();
+copier.onFinished((withError) => {
+    if (withError) {
+        if (copier.failedPaths) {
+            // let user see which files?
+            Zeronet.showMessage("warning", `Failed to copy <strong>${copier.failedPaths.length} ZeroNet files</strong> out of ${copier.filesCount}.`);
+        } else {
+            Zeronet.showMessage("warning", "Failed to copy ZeroNet");
+        }
+    } else {
+        Zeronet.showMessage("success", "Successfully copied ZeroNet");
+    }
+});
+copier.onStarted(() => {
+    copier.failedPaths = [];
+});
+copier.onFailure((path, err) => {
+    //console.warn("Failed to copy", path, err);
+
+    if (!copier.failedPaths) {
+        copier.failedPaths = [];
+    }
+    copier.failedPaths.push(path);
+});
 
 // Check for whether the external drive zeronet is on is present
 Zeronet.currentZeronetUuid().then((uuid) => {
@@ -1063,7 +1122,7 @@ udisks.drives.then((drives) => {
 
                                 if (uiPartiton.zeronetPath) {
                                     // TODO ask whether to overwrite
-                                    alert("Not yet implemented: there's a ZeroNet instance already, ask whether to rename the existing instance")
+                                    //alert("Not yet implemented: there's a ZeroNet instance already, ask whether to rename the existing instance")
                                     resolve();
                                     return;
                                 }
@@ -1077,16 +1136,17 @@ udisks.drives.then((drives) => {
                             return StorageUtils.diskFree(partition.mountpoint);
 
                         }).then((freeSpace) => {
+
                             uiPartiton.freeSpace = freeSpace;
 
-                            alert("Not yet implemented: Check for sufficient free space")
+                            //alert("Not yet implemented: Check for sufficient free space")
 
-                            copier.toPath = partition.mountpoint;
+                            copier.toPath = partition.mountpoint + "/ZeroNet-master";
                             copier.toUuid = partition.uuid;
 
                             return copier.start()
                         }).then(() => {
-
+                            //
                         }, (err) => {
                             Zeronet.showMessage("warning", "Failed to start copying: " + err);
                             console.warn("Failed to start copy", err);
@@ -1103,13 +1163,6 @@ udisks.drives.then((drives) => {
                             console.log("Unmount", partition, "after copying finished");
                             partition.unmount().then(() => {}, (err) => { console.warn("Failed to unmount", partition, "after copying", err); });
                         }
-
-                        Zeronet.showMessage("success", "Successfully copied ZeroNet");
-                    });
-
-                    copier.onFailed((err) => {
-                        ZeroNet.showMessage("danger", "Failed to copy ZeroNet: " + err);
-                        console.warn("Failed to copy zeronet", err);
                     });
 
                     var unitSubStateChanged = (newState) => {
