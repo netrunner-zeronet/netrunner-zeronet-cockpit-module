@@ -100,9 +100,11 @@ class StorageUtils
     }
 
     static move(source, destination) {
-        var args = ["mv", source, destination];
+        return new Promise((resolve, reject) => {
+            var args = ["mv", source, destination];
 
-
+            cockpit.spawn(args, {superuser: true}).done(resolve).fail(reject);
+        });
     }
 
     static symlinkTarget(path) {
