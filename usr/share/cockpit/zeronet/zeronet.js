@@ -754,18 +754,26 @@ class Copier
                 return reject("Cannot start copy while already copying");
             }
 
-            // NOTE Cannot use cockpit.spawn here as the process will exit as soon as the website closes or is reloaded
-            // but we want the progress to carry on without is (which is what all the DBus reporting is for)
-            let cmd = `/usr/bin/copy-zeronet '${this.fromPath}' '${this.toPath}'`;
-            console.log("Start copy", cmd, {superuser: "try"});
-            let proc = cockpit.script(cmd).done((result) => {
-                resolve();
-            // TODO check if we need this since we get a Finished signal
-            // but might not be connected (when copy finishes too qucikly)
-            }).fail((err) => {
-                reject(err);
+            cockpit.user().done((user) => {
+
+                // NOTE Cannot use cockpit.spawn here as the process will exit as soon as the website closes or is reloaded
+                // but we want the progress to carry on without is (which is what all the DBus reporting is for)
+                let script = `/usr/bin/copy-zeronet '${this.fromPath}' '${this.toPath}'`;
+                // HACK needed since as superuser we cannot access this user's DBus stuff
+                let environ = [
+                    "XDG_RUNTIME_DIR=/run/user/" + user.id,
+                    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/" + user.id + "/bus"
+                ]
+                let proc = cockpit.script(script, [] /*args*/, {
+                    superuser: "try",
+                    environ: environ
+                }).done((result) => {
+                    resolve();
+                // TODO check if we need this since we get a Finished signal
+                // but might not be connected (when copy finishes too qucikly)
+                }).fail(reject);
+                //proc.stream(console.log);
             });
-            //proc.stream(console.log);
         });
     }
 
