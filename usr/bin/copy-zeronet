@@ -170,6 +170,13 @@ if __name__ == "__main__":
         dbusService.Finished(errorEncountered)
         sys.exit(4)
 
+    # Now transfer the mtime of the data folder over so "last used" is the same
+    try:
+        stinfo = os.stat(os.path.join(src, "data"))
+        os.utime(os.path.join(dest, "data"), (stinfo.st_atime, stinfo.st_mtime))
+    except Exception as e:
+        print("Exception adjusting data mtime", str(e))
+
     print("Done copying")
     dbusService.Finished(errorEncountered)
     sys.exit(0)
