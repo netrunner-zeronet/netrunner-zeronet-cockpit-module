@@ -13,6 +13,7 @@ Exit codes:
 3 - DBus service already running (already copying something?)
 4 - An error occurred while copying (also emitted as DBus signal "Failed")
 5 - Copying was canceled by the user
+6 - Failed to register service or other DBus error on initialization
 
 DBus:
 Service Name:
@@ -120,6 +121,9 @@ if __name__ == "__main__":
     except dbus.exceptions.NameExistsException:
         print("DBus service is already running")
         sys.exit(3)
+    except dbus.exceptions.DBusException as e:
+        print("Exception when registering service", str(e))
+        sys.exit(6)
 
     dbusService = DBusService("/")
 
