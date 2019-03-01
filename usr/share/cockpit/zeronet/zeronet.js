@@ -779,7 +779,8 @@ class Copier
 
     cancel() {
         return new Promise((resolve, reject) => {
-            this._client().call("/", Copier.DBUS_INTERFACE, "Cancel").done(resolve).fail(reject);
+            // copier exits right after calling Cancel without replying, so this call technically always fails, hence fail(resolve)
+            this._client().call("/", Copier.DBUS_INTERFACE, "Cancel").done(resolve).fail(resolve);
         });
     }
 
@@ -838,14 +839,9 @@ class Copier
                 break;
             case "Finished":
                 if (this._finishedCbs) {
-                    let withError = data[0];
-                    let err = data[1];
+                    let result = data[0];
                     this._finishedCbs.forEach((cb) => {
-                        if (withError) {
-                            cb(true, err);
-                        } else {
-                            cb(false);
-                        }
+                        cb(result);
                     });
                 }
                 break;
@@ -961,8 +957,8 @@ var mainBusy = document.getElementById("mainbusy");
 mainBusy.classList.remove("hidden");
 
 var copier = new Copier();
-copier.onFinished((withError) => {
-    if (withError) {
+copier.onFinished((result) => {
+    if (result === "failure") {
         if (copier.failedPaths) {
             if (copier.failedPaths.length === 1) {
                 Zeronet.showMessage("warning", `Failed to copy <strong>${copier.failedPaths[0]}</strong>.`);
@@ -971,17 +967,19 @@ copier.onFinished((withError) => {
                 Zeronet.showMessage("warning", `Failed to copy <strong>${copier.failedPaths.length} ZeroNet files</strong> out of ${copier.filesCount}.`);
             }
         } else {
-            Zeronet.showMessage("warning", "Failed to copy ZeroNet");
+            Zeronet.showMessage("warning", "Failed to successfully copy ZeroNet");
         }
-    } else {
+    } else if (result === "done") {
         Zeronet.showMessage("success", `Successfully copied ZeroNet to <strong>${copier.toPath}</strong>`);
+    } else {
+        console.log("Copier finished with result", result);
     }
 });
 copier.onStarted(() => {
     copier.failedPaths = [];
 });
 copier.onFailure((path, err) => {
-    //console.warn("Failed to copy", path, err);
+    console.warn("Failed to copy", path, err);
 
     if (!copier.failedPaths) {
         copier.failedPaths = [];
@@ -1119,8 +1117,6 @@ udisks.drives.then((drives) => {
 
                         copier.targetSelectionMode = false;
 
-                        // TODO also mount source partition and check it so that zeronetSize is up to date
-
                         Zeronet.mount(copier.fromUiPartition.partition).then((wasMounted) => {
 
                             copier.fromUiPartition.partition.mountedForCopying = wasMounted;
@@ -1221,15 +1217,31 @@ udisks.drives.then((drives) => {
                         }).then(() => {
                             //
                         }, (err) => {
-                            Zeronet.showMessage("warning", "Failed to start copying: " + err);
-                            console.warn("Failed to start copy", err);
+
+                            switch (err.exit_status) {
+                            case 3:
+                                Zeronet.showMessage("danger", "A copy job is already in progress.");
+                                break;
+                            case 4: // failure/exception on copy (handled via DBus)
+                                break;
+                            case 5: // user canceled (handled via DBus)
+                                break;
+                            case 6:
+                                // TODO add stderr to the message?
+                                Zeronet.showMessage("danger", "Failed to register copy job on DBus, check system configuration.");
+                                break;
+                            default:
+                                Zeronet.showMessage("warning", "Failed to start copying: " + err);
+                                console.warn("Failed to start copy", err);
+                            }
+
                         }).finally(() => {
                             uiPartiton.busy = false;
                         });
 
                     });
 
-                    copier.onFinished(() => {
+                    copier.onFinished((result) => {
                         // should we unmount again?
                         /*if (partition.mountedForCopying
                             && ((copier.fromUuid && copier.fromUuid === partition.uuid) || (copier.toUuid && copier.toUuid === partition.uuid))) {
@@ -1237,8 +1249,10 @@ udisks.drives.then((drives) => {
                             partition.unmount().then(() => {}, (err) => { console.warn("Failed to unmount", partition, "after copying", err); });
                         }*/
 
-                        if (copier.toUuid === partition.uuid) {
-                            uiPartiton.checkZeronet();
+                        if (result === "done" || result === "failure") {
+                            if (copier.toUuid === partition.uuid) {
+                                uiPartiton.checkZeronet();
+                            }
                         }
                     });
 

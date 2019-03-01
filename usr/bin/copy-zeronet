@@ -19,14 +19,21 @@ DBus:
 Service Name:
 com.netrunner.zeronet.cockpit.copier
 
-Signals (namespace com.netrunner.zeronet)
+Methods (namespace com.netrunner.zeronet):
+
+Info - returns variant map of info about the current copy job (fromPath, toPath, filesCount)
+Cancel - cancels the copy job, emits Finished("canceled") and exits with code 5
+
+Signals (namespace com.netrunner.zeronet):
 
 Progress - peridocially reported with the number of copied files and total amount
-Finished - copying finished successfully
-Failed - copying failed (argument "s" contains exception message)
+Finished - copying finished (argument "s" contains result, "done", "failure", or "canceled")
+Failure - copying a file failed, emitted for every file (arguments "ss" contain source file path and exception message)
 """
 
-import dbus, dbus.service, dbus.exceptions
+import dbus
+import dbus.service
+import dbus.exceptions
 import sys
 import os
 import shutil
@@ -58,17 +65,15 @@ class DBusService(dbus.service.Object):
             dbus.String(u"fromPath"): src,
             dbus.String(u"toPath"): dest,
             dbus.String(u"filesCount"): filesCount
-        },
-        signature = dbus.Signature("sv")
+            },
+            signature = dbus.Signature("sv")
         )
         return dict
 
     @dbus.service.method(dbus_interface="com.netrunner.zeronet",
                          in_signature="", out_signature="b")
     def Cancel(self):
-        # not really an error?
-        errorEncountered = True
-        self.Finished(errorEncountered)
+        self.Finished("canceled")
         # just exiting here causes a dbus error
         # but setting a "wasCanceled" variable and then exiting
         # in the copy loop doesn't seem to work
@@ -81,7 +86,7 @@ class DBusService(dbus.service.Object):
         pass
 
     @dbus.service.signal(dbus_interface="com.netrunner.zeronet")
-    def Finished(self, withError):
+    def Finished(self, result):
         pass
 
     @dbus.service.signal(dbus_interface="com.netrunner.zeronet")
@@ -170,8 +175,7 @@ if __name__ == "__main__":
 
     except Exception as e:
         print("Exception file copying", str(e))
-        errorEncountered = True
-        dbusService.Finished(errorEncountered)
+        dbusService.Finished("failure")
         sys.exit(4)
 
     # Now transfer the mtime of the data folder over so "last used" is the same
@@ -182,5 +186,5 @@ if __name__ == "__main__":
         print("Exception adjusting data mtime", str(e))
 
     print("Done copying")
-    dbusService.Finished(errorEncountered)
+    dbusService.Finished("failure" if errorEncountered else "done")
     sys.exit(0)
