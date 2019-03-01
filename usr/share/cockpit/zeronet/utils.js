@@ -208,3 +208,18 @@ class DBusUtils
     }
 
 }
+
+class UiUtils
+{
+
+    static createElementWithClassName(name, className) {
+        var element = document.createElement(name);
+        element.className = className;
+        return element;
+    }
+
+    static createButton(type) {
+        return UiUtils.createElementWithClassName("button", "btn btn-" + type);
+    }
+
+}
