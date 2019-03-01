@@ -81,44 +81,11 @@ class StorageUtils
         });
     }
 
-    static find(path, args) {
-        var args = ["find", path];
-
-        if (args) {
-            if (args.type) {
-                if (args.type.length === 1) {
-                    args.push("-type", args.type);
-                } else {
-                    throw new TypeError("Illegal find type specified");
-                }
-            }
-        }
-
-        cockpit.spawn(args, {superuser: true}).done((result) => {
-            console.log("listing", result);
-        }).fail(reject);
-    }
-
     static move(source, destination) {
         return new Promise((resolve, reject) => {
             var args = ["mv", source, destination];
 
             cockpit.spawn(args, {superuser: true}).done(resolve).fail(reject);
-        });
-    }
-
-    static symlinkTarget(path) {
-        return new Promise((resolve, reject) => {
-            var args = ["readlink", "-f" /*canonicalize*/, path];
-
-            cockpit.spawn(args, {superuser: true}).done((result) => {
-                resolve(result.trim());
-            }).fail((err) => {
-                if (err.exit_status === 1) { // not a symlink
-                    return resolve("");
-                }
-                reject(err);
-            });
         });
     }
 
